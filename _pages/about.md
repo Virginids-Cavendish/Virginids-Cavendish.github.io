@@ -169,7 +169,9 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
   .vg-project img {
     width: 100%;
     aspect-ratio: 16 / 9;
-    object-fit: cover;
+    object-fit: contain;
+    padding: 0.5rem;
+    background: var(--vg-soft);
     border-radius: 8px;
     border: 1px solid var(--vg-line);
   }
