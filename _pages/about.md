@@ -2,7 +2,7 @@
 layout: default
 title: Home
 permalink: /
-nav: true
+nav: false
 nav_order: 1
 description: 阎光锋 / Virginids 的个人学术作品集首页。
 ---
