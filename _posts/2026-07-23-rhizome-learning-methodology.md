@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Rhizome-Learn 方法札记
-date: 2026-07-24 09:00:00
+date: 2026-07-23 18:30:00 +0800
 description: 从题目列表转向节点、路径和反馈回路
 tags: adaptive-learning control-theory
 categories: research

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: 翻译札记：概念不是标签
-date: 2026-07-24 10:00:00
+date: 2026-07-23 19:15:00 +0800
 description: Xenofeminism 与 Platform Socialism 的术语工作
 tags: translation theory
 categories: translation
