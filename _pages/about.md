@@ -275,7 +275,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
       </div>
     </article>
     <article class="vg-project">
-      <img src="{{ '/assets/img/translation-xenofeminism-cover.png' | relative_url }}" alt="Xenofeminism translation project cover">
+      <img src="{{ '/assets/img/translation-xenofeminism-wide.png' | relative_url }}" alt="Xenofeminism translation project cover">
       <div>
         <h3>Translation Projects</h3>
         <p>《陌异女性主义》和《平台社会主义》是我的译著项目。网站只展示项目名称、主题和翻译札记，不提供 PDF 下载和长正文摘录。</p>
