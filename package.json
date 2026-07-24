@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "verify:assignment": "node scripts/verify-assignment.mjs",
     "lint:prettier": "prettier . --check",
     "lint:style-contract": "node test/style_contract.js",
     "test:visual": "playwright test --config test/visual/playwright.config.js",

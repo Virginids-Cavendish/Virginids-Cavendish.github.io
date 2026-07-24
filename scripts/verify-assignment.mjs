@@ -56,7 +56,7 @@ const forbiddenTerms = [
 ];
 
 const forbiddenPatterns = [
-  /\b[A-Z0-9_]*(API|SECRET|TOKEN|KEY)[A-Z0-9_]*\s*[:=]\s*['"]?[A-Za-z0-9_\-]{12,}/i,
+  /\b(api[_-]?key|secret|access[_-]?token|auth[_-]?token|github[_-]?token|openai[_-]?key)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{12,}/i,
   /\b(password|passwd|pwd)\s*[:=]\s*['"]?[^'"\s]{8,}/i,
 ];
 
