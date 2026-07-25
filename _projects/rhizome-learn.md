@@ -1,19 +1,16 @@
 ---
 layout: page
 title: Rhizome-Learn
-description: private research prototype for structured learning and adaptive review
-img: assets/img/rhizome-learn-preview.png
+description: An adaptive learning atlas for structured knowledge, practice, and feedback.
+img: assets/img/renaissance-rhizome/rhizome-interface.png
 importance: 1
 category: research
 ---
 
-Rhizome-Learn 是一个私有研究原型，用来探索学习材料如何被组织成节点、路径和反馈回路。它的重点不是把题目堆成列表，而是把概念、练习、错误轨迹和复习策略连接起来，让学习过程可以被追踪、调整和复盘。
+Rhizome-Learn 把学习材料组织成可以进入、离开和重新连接的知识地形。概念、练习、错误轨迹与复习策略不再只是列表，而是共同组成一组能够持续校正的反馈路径。
 
-公开展示边界：
+![Rhizome-Learn 的真实运行界面]({{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }})
 
-- 可以公开：项目目标、方法概要、脱敏网页截图、技术方向和反思。
-- 不公开：私有仓库链接、题库正文、教材 PDF 内容、本地路径、API Key、Token 和任何未授权材料。
+当前界面从 Probability & Statistical Inference 出发，以 plateau、section、exercise 和 worked example 组成学习地图。路径不是固定目录，而会随着知识缺口、练习结果和下一步目标重新获得权重。
 
-![Sanitized Rhizome-Learn interface preview]({{ '/assets/img/rhizome-learn-preview.png' | relative_url }})
-
-这个项目也影响了本站的视觉语言：研究地形、状态轨迹、节点网络和 rhizome network 都来自我对学习系统结构的理解。
+这个项目也构成本站研究线的视觉语法：状态轨迹、节点网络、误差反馈和根茎式入口，都来自对学习系统结构的持续实验。
