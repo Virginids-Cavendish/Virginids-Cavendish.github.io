@@ -75,6 +75,20 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
       <span data-rr-sample-readout>FIELD / CALIBRATED</span>
     </div>
 
+    <fieldset class="rr-fidelity" data-rr-fidelity-control>
+      <legend>FIDELITY</legend>
+      <div class="rr-fidelity__modes" role="group" aria-label="Field sampling fidelity">
+        <button type="button" data-rr-fidelity="auto" aria-pressed="true">AUTO</button>
+        <span aria-hidden="true">·</span>
+        <button type="button" data-rr-fidelity="3" aria-pressed="false">III</button>
+        <span aria-hidden="true">·</span>
+        <button type="button" data-rr-fidelity="2" aria-pressed="false">II</button>
+        <span aria-hidden="true">·</span>
+        <button type="button" data-rr-fidelity="1" aria-pressed="false">I</button>
+      </div>
+      <output data-rr-fidelity-readout aria-live="polite">III / measuring Hz</output>
+    </fieldset>
+
     <figure
       class="rr-hero__signature rr-signature"
       data-rr-calligraphy
@@ -254,7 +268,12 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
       </p>
     </header>
 
-    <div class="rr-interface" data-rr-readable>
+    <div
+      class="rr-interface"
+      data-rr-readable
+      data-rr-assembly="unseen"
+      data-rr-assembly-kind="interface"
+    >
       <figure class="rr-interface__master">
         <picture class="rr-picture">
           <source
@@ -285,6 +304,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <img
             class="rr-interface__fragment"
             data-rr-fragment="research"
+            data-rr-assembly-fragment
             data-rr-index="0"
             src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
             alt=""
@@ -300,6 +320,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <img
             class="rr-interface__fragment"
             data-rr-fragment="research"
+            data-rr-assembly-fragment
             data-rr-index="1"
             src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
             alt=""
@@ -315,6 +336,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <img
             class="rr-interface__fragment"
             data-rr-fragment="research"
+            data-rr-assembly-fragment
             data-rr-index="2"
             src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
             alt=""
@@ -330,6 +352,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <img
             class="rr-interface__fragment"
             data-rr-fragment="research"
+            data-rr-assembly-fragment
             data-rr-index="3"
             src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
             alt=""
@@ -373,7 +396,12 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
     </header>
 
     <div class="rr-translation__books">
-      <article class="rr-book rr-book--xenofeminism" data-rr-book="xenofeminism">
+      <article
+        class="rr-book rr-book--xenofeminism"
+        data-rr-book="xenofeminism"
+        data-rr-assembly="unseen"
+        data-rr-assembly-kind="book"
+      >
         <header class="rr-book__header">
           <p>VOLUME A / XF</p>
           <h3>《陌异女性主义》</h3>
@@ -388,6 +416,8 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <img
               src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.png' | relative_url }}"
               alt="《陌异女性主义》封面"
+              width="875"
+              height="1241"
               loading="lazy"
               decoding="async"
             >
@@ -399,14 +429,17 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <picture class="rr-picture rr-book__fragment-frame">
             <source
               type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.webp' | relative_url }}"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-cover-fragment.webp' | relative_url }}"
             >
             <img
               class="rr-book__fragment"
               data-rr-fragment="cover"
+              data-rr-assembly-fragment
               data-rr-index="0"
-              src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.png' | relative_url }}"
+              src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover-fragment.png' | relative_url }}"
               alt=""
+              width="438"
+              height="621"
               loading="lazy"
               decoding="async"
             >
@@ -414,14 +447,17 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <picture class="rr-picture rr-book__fragment-frame">
             <source
               type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.webp' | relative_url }}"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-cover-fragment.webp' | relative_url }}"
             >
             <img
               class="rr-book__fragment"
               data-rr-fragment="cover"
+              data-rr-assembly-fragment
               data-rr-index="1"
-              src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.png' | relative_url }}"
+              src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover-fragment.png' | relative_url }}"
               alt=""
+              width="438"
+              height="621"
               loading="lazy"
               decoding="async"
             >
@@ -429,14 +465,17 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <picture class="rr-picture rr-book__fragment-frame">
             <source
               type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.webp' | relative_url }}"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-cover-fragment.webp' | relative_url }}"
             >
             <img
               class="rr-book__fragment"
               data-rr-fragment="cover"
+              data-rr-assembly-fragment
               data-rr-index="2"
-              src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover.png' | relative_url }}"
+              src="{{ '/assets/img/renaissance-rhizome/pages/xf-cover-fragment.png' | relative_url }}"
               alt=""
+              width="438"
+              height="621"
               loading="lazy"
               decoding="async"
             >
@@ -458,7 +497,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-assembly.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-assembly-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/xf-assembly.png' | relative_url }}"
@@ -483,7 +522,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.png' | relative_url }}"
@@ -508,7 +547,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-future.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-future-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/xf-future.png' | relative_url }}"
@@ -533,7 +572,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-postscarcity.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-postscarcity-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/xf-postscarcity.png' | relative_url }}"
@@ -547,7 +586,12 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
         </div>
       </article>
 
-      <article class="rr-book rr-book--platform" data-rr-book="platform-socialism">
+      <article
+        class="rr-book rr-book--platform"
+        data-rr-book="platform-socialism"
+        data-rr-assembly="unseen"
+        data-rr-assembly-kind="book"
+      >
         <header class="rr-book__header">
           <p>VOLUME B / PS</p>
           <h3>《平台社会主义》</h3>
@@ -562,6 +606,8 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <img
               src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
               alt="《平台社会主义》彩色英文封面"
+              width="832"
+              height="1182"
               loading="lazy"
               decoding="async"
             >
@@ -573,14 +619,17 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <picture class="rr-picture rr-book__fragment-frame">
             <source
               type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.webp' | relative_url }}"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover-fragment.webp' | relative_url }}"
             >
             <img
               class="rr-book__fragment"
               data-rr-fragment="cover"
+              data-rr-assembly-fragment
               data-rr-index="3"
-              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
+              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover-fragment.png' | relative_url }}"
               alt=""
+              width="416"
+              height="591"
               loading="lazy"
               decoding="async"
             >
@@ -588,14 +637,17 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <picture class="rr-picture rr-book__fragment-frame">
             <source
               type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.webp' | relative_url }}"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover-fragment.webp' | relative_url }}"
             >
             <img
               class="rr-book__fragment"
               data-rr-fragment="cover"
+              data-rr-assembly-fragment
               data-rr-index="4"
-              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
+              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover-fragment.png' | relative_url }}"
               alt=""
+              width="416"
+              height="591"
               loading="lazy"
               decoding="async"
             >
@@ -603,14 +655,17 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
           <picture class="rr-picture rr-book__fragment-frame">
             <source
               type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.webp' | relative_url }}"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover-fragment.webp' | relative_url }}"
             >
             <img
               class="rr-book__fragment"
               data-rr-fragment="cover"
+              data-rr-assembly-fragment
               data-rr-index="5"
-              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
+              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover-fragment.png' | relative_url }}"
               alt=""
+              width="416"
+              height="591"
               loading="lazy"
               decoding="async"
             >
@@ -632,7 +687,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-democracy.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-democracy-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/ps-democracy.png' | relative_url }}"
@@ -657,7 +712,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-commons.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-commons-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/ps-commons.png' | relative_url }}"
@@ -682,7 +737,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.png' | relative_url }}"
@@ -707,7 +762,7 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
             <picture class="rr-picture">
               <source
                 type="image/webp"
-                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-infrastructure.webp' | relative_url }}"
+                srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-infrastructure-thumb.webp' | relative_url }}"
               >
               <img
                 src="{{ '/assets/img/renaissance-rhizome/pages/ps-infrastructure.png' | relative_url }}"
@@ -759,63 +814,83 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
       </ol>
     </div>
 
-    <div class="rr-collision__fragments" aria-hidden="true">
-      <picture class="rr-picture">
-        <source
-          type="image/webp"
-          srcset="{{ '/assets/img/renaissance-rhizome/rhizome-interface.webp' | relative_url }}"
-        >
-        <img
-          data-rr-fragment="research"
-          data-rr-index="4"
-          src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
-          alt=""
-          loading="lazy"
-          decoding="async"
-        >
-      </picture>
-      <picture class="rr-picture">
-        <source
-          type="image/webp"
-          srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.webp' | relative_url }}"
-        >
-        <img
-          data-rr-fragment="page"
-          data-rr-index="5"
-          src="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.png' | relative_url }}"
-          alt=""
-          loading="lazy"
-          decoding="async"
-        >
-      </picture>
-      <picture class="rr-picture">
-        <source
-          type="image/webp"
-          srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.webp' | relative_url }}"
-        >
-        <img
-          data-rr-fragment="page"
-          data-rr-index="6"
-          src="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.png' | relative_url }}"
-          alt=""
-          loading="lazy"
-          decoding="async"
-        >
-      </picture>
-      <picture class="rr-picture">
-        <source
-          type="image/webp"
-          srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.webp' | relative_url }}"
-        >
-        <img
-          data-rr-fragment="translation"
-          data-rr-index="7"
-          src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
-          alt=""
-          loading="lazy"
-          decoding="async"
-        >
-      </picture>
+    <div class="rr-collision__evidence-stage" data-rr-collision-evidence>
+      <div class="rr-collision__evidence-viewport">
+        <div class="rr-collision__evidence" data-rr-evidence-track aria-label="Visual evidence">
+          <picture
+            class="rr-picture rr-collision__evidence-item"
+            data-rr-evidence
+            data-rr-evidence-state="queued"
+            role="img"
+            aria-label="Rhizome-Learn 学习界面证据"
+          >
+            <source
+              type="image/webp"
+              srcset="{{ '/assets/img/renaissance-rhizome/rhizome-interface.webp' | relative_url }}"
+            >
+            <img
+              src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
+              alt="Rhizome-Learn 学习界面"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <picture
+            class="rr-picture rr-collision__evidence-item"
+            data-rr-evidence
+            data-rr-evidence-state="queued"
+            role="img"
+            aria-label="《陌异女性主义》反馈正文页证据"
+          >
+            <source
+              type="image/webp"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.webp' | relative_url }}"
+            >
+            <img
+              src="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.png' | relative_url }}"
+              alt="《陌异女性主义》反馈正文页"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <picture
+            class="rr-picture rr-collision__evidence-item"
+            data-rr-evidence
+            data-rr-evidence-state="queued"
+            role="img"
+            aria-label="《平台社会主义》公共平台正文页证据"
+          >
+            <source
+              type="image/webp"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.webp' | relative_url }}"
+            >
+            <img
+              src="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.png' | relative_url }}"
+              alt="《平台社会主义》公共平台正文页"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+          <picture
+            class="rr-picture rr-collision__evidence-item"
+            data-rr-evidence
+            data-rr-evidence-state="queued"
+            role="img"
+            aria-label="《平台社会主义》英文封面证据"
+          >
+            <source
+              type="image/webp"
+              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.webp' | relative_url }}"
+            >
+            <img
+              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
+              alt="《平台社会主义》英文封面"
+              loading="lazy"
+              decoding="async"
+            >
+          </picture>
+        </div>
+      </div>
     </div>
 
     <div class="rr-collision__release" aria-hidden="true">
@@ -904,6 +979,10 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
     >
       CLOSE <span aria-hidden="true">×</span>
     </button>
+    <div class="rr-reader__cursor" data-rr-reader-cursor aria-hidden="true">
+      <span class="rr-reader__cursor-glow"></span>
+      <span class="rr-reader__cursor-point"></span>
+    </div>
     <figure>
       <picture class="rr-picture">
         <source

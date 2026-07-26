@@ -205,6 +205,7 @@ kramdown:
 include: ["_pages"]
 exclude:
   - al-folio-upgrade-report.md
+  - assets/jupyter/
   - bin/
   - CONTRIBUTING.md
   - CUSTOMIZE.md
@@ -220,6 +221,11 @@ exclude:
   - lighthouse_results/
   - package.json
   - package-lock.json
+  - output/
+  - report/
+  - scripts/
+  - test/
+  - test-results/
   - _pages/about_einstein.md
   - purgecss.config.js
   - README.md
@@ -313,7 +319,7 @@ terser:
 
 jekyll-archives:
   posts:
-    enabled: [year, tags, categories] # enables year, tag and category archives (remove if you need to disable one of them).
+    enabled: [year] # Tag and category routes are starter-owned Notes Atlas pages.
     permalinks:
       year: "/blog/:year/"
       tags: "/blog/:type/:name/"
@@ -321,7 +327,7 @@ jekyll-archives:
   books:
     enabled: [year, tags, categories] # enables year, tag and category archives (remove if you need to disable one of them).
 
-display_tags: ["control-theory", "adaptive-learning", "translation"] # these tags will be displayed on the front page of your blog
+display_tags: ["adaptive-learning", "control-theory", "learner-agency", "translation", "terminology", "platform-politics"]
 display_categories: ["research", "translation"] # these categories will be displayed on the front page of your blog
 
 # -----------------------------------------------------------------------------

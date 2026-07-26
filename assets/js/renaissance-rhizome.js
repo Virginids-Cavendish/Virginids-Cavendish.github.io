@@ -67,6 +67,7 @@
       lastGestureAt: 0,
       soundEnabled: false,
       motionOverride: null,
+      fidelityMode: "auto",
     };
     const stored = safeSessionStorage.read();
     if (!stored) return fallback;
@@ -80,6 +81,7 @@
         lastGestureAt: Number(parsed.lastGestureAt) || 0,
         soundEnabled: parsed.soundEnabled === true,
         motionOverride: typeof parsed.motionOverride === "boolean" ? parsed.motionOverride : null,
+        fidelityMode: ["auto", "3", "2", "1"].includes(String(parsed.fidelityMode)) ? String(parsed.fidelityMode) : "auto",
       };
     } catch {
       return fallback;
@@ -99,10 +101,898 @@
     );
   };
 
+  const prepareScrollVisualAssets = (root) => {
+    const images = Array.from(root.querySelectorAll(".rr-translation img, .rr-collision img"));
+    if (!images.length) return Promise.resolve();
+
+    const decodes = images.map((image) => {
+      image.loading = "eager";
+      image.fetchPriority = "low";
+      if (typeof image.decode !== "function") return Promise.resolve();
+      return image.decode().catch(() => undefined);
+    });
+    return Promise.race([Promise.allSettled(decodes), new Promise((resolve) => window.setTimeout(resolve, 4000))]);
+  };
+
+  class FrameScheduler {
+    constructor(root) {
+      this.root = root;
+      this.measureCallbacks = new Map();
+      this.callbacks = new Map();
+      this.dirty = new Set(["viewportDirty", "resizeDirty"]);
+      this.frameHandle = 0;
+      this.runningFrame = false;
+      this.lastTime = 0;
+      this.frameCount = 0;
+      this.recentFrameIntervals = [];
+      this.recentWorkDurations = [];
+      this.callbackDurations = new Map();
+      this.refreshSamples = [];
+      this.refreshSampleTick = 0;
+      this.refreshHz = 60;
+      this.refreshMeasured = false;
+      this.boundFrame = this.frame.bind(this);
+    }
+
+    register(name, callback) {
+      this.callbacks.set(name, callback);
+      return () => this.callbacks.delete(name);
+    }
+
+    registerMeasure(name, callback) {
+      this.measureCallbacks.set(name, callback);
+      return () => this.measureCallbacks.delete(name);
+    }
+
+    wake(flag = "viewportDirty") {
+      this.dirty.add(flag);
+      if (!this.frameHandle && !this.runningFrame && !document.hidden) {
+        this.frameHandle = window.requestAnimationFrame(this.boundFrame);
+      }
+    }
+
+    stop() {
+      if (this.frameHandle) {
+        window.cancelAnimationFrame(this.frameHandle);
+        this.frameHandle = 0;
+      }
+      this.lastTime = 0;
+    }
+
+    sampleRefresh(delta) {
+      // Keep converging when a software compositor briefly delivers 20-30 Hz.
+      // Very large stalls are still excluded so a single long task cannot be
+      // mistaken for the panel refresh rate.
+      if (delta < 3 || delta > 125) return;
+      this.refreshSamples.push(delta);
+      if (this.refreshSamples.length > 120) this.refreshSamples.shift();
+      if (this.refreshSamples.length < 18) return;
+      this.refreshSampleTick += 1;
+      if (this.refreshSampleTick % 9 !== 0) return;
+      const ordered = [...this.refreshSamples].sort((first, second) => first - second);
+      const start = Math.floor(ordered.length * 0.15);
+      const end = Math.max(start + 1, Math.ceil(ordered.length * 0.85));
+      const middle = ordered.slice(start, end);
+      const median = middle[Math.floor(middle.length * 0.5)];
+      const measured = clamp(1000 / Math.max(1, median), 30, 360);
+      this.refreshHz = lerp(this.refreshHz, measured, this.refreshMeasured ? 0.12 : 1);
+      this.refreshMeasured = true;
+    }
+
+    frame(time) {
+      const workStartedAt = performance.now();
+      this.frameHandle = 0;
+      if (document.hidden) {
+        this.stop();
+        return;
+      }
+
+      this.runningFrame = true;
+      this.frameCount += 1;
+      const delta = this.lastTime ? clamp(time - this.lastTime, 1, 100) : 16.7;
+      if (this.lastTime) {
+        this.sampleRefresh(delta);
+        this.recentFrameIntervals.push(delta);
+        if (this.recentFrameIntervals.length > 180) this.recentFrameIntervals.shift();
+      }
+      this.lastTime = time;
+      const dirty = new Set(this.dirty);
+      this.dirty.clear();
+      let continueAnimating = false;
+
+      this.measureCallbacks.forEach((callback, name) => {
+        const startedAt = performance.now();
+        try {
+          callback(time, delta, dirty);
+        } catch {
+          // Measurement failures are isolated to their decorative subsystem.
+        }
+        this.recordCallbackDuration(`measure:${name}`, performance.now() - startedAt);
+      });
+
+      this.callbacks.forEach((callback, name) => {
+        const startedAt = performance.now();
+        try {
+          continueAnimating = callback(time, delta, dirty) === true || continueAnimating;
+        } catch {
+          // A decorative subsystem must never stop navigation or reading.
+        }
+        this.recordCallbackDuration(name, performance.now() - startedAt);
+      });
+
+      this.runningFrame = false;
+      this.recentWorkDurations.push(performance.now() - workStartedAt);
+      if (this.recentWorkDurations.length > 180) this.recentWorkDurations.shift();
+      if (continueAnimating || this.dirty.size) {
+        this.frameHandle = window.requestAnimationFrame(this.boundFrame);
+      }
+    }
+
+    recordCallbackDuration(name, duration) {
+      const samples = this.callbackDurations.get(name) || [];
+      samples.push(duration);
+      if (samples.length > 180) samples.shift();
+      this.callbackDurations.set(name, samples);
+    }
+
+    resetPerformanceWindow() {
+      this.recentFrameIntervals.length = 0;
+      this.recentWorkDurations.length = 0;
+      this.callbackDurations.clear();
+    }
+
+    snapshot() {
+      const orderedIntervals = [...this.recentFrameIntervals].sort((first, second) => first - second);
+      const p90Index = Math.min(orderedIntervals.length - 1, Math.floor(orderedIntervals.length * 0.9));
+      const orderedWork = [...this.recentWorkDurations].sort((first, second) => first - second);
+      const workP90Index = Math.min(orderedWork.length - 1, Math.floor(orderedWork.length * 0.9));
+      const callbackWork = {};
+      this.callbackDurations.forEach((samples, name) => {
+        const ordered = [...samples].sort((first, second) => first - second);
+        const callbackP90Index = Math.min(ordered.length - 1, Math.floor(ordered.length * 0.9));
+        callbackWork[name] = {
+          p90Ms: ordered.length ? Number(ordered[callbackP90Index].toFixed(2)) : null,
+          maxMs: ordered.length ? Number(ordered[ordered.length - 1].toFixed(2)) : null,
+        };
+      });
+      return {
+        frames: this.frameCount,
+        dirty: Array.from(this.dirty),
+        refreshHz: Number(this.refreshHz.toFixed(2)),
+        refreshMeasured: this.refreshMeasured,
+        scheduled: Boolean(this.frameHandle),
+        cadence: {
+          samples: orderedIntervals.length,
+          p90Ms: orderedIntervals.length ? Number(orderedIntervals[p90Index].toFixed(2)) : null,
+        },
+        work: {
+          samples: orderedWork.length,
+          p90Ms: orderedWork.length ? Number(orderedWork[workP90Index].toFixed(2)) : null,
+          maxMs: orderedWork.length ? Number(orderedWork[orderedWork.length - 1].toFixed(2)) : null,
+        },
+        callbackWork,
+      };
+    }
+  }
+
+  class FidelityController {
+    constructor(root, scheduler, session, persist) {
+      this.root = root;
+      this.scheduler = scheduler;
+      this.session = session;
+      this.persist = persist;
+      this.mode = ["auto", "3", "2", "1"].includes(session.fidelityMode) ? session.fidelityMode : "auto";
+      this.level = this.mode === "auto" ? 3 : Number(this.mode);
+      this.costSamples = [];
+      this.longTaskPressure = 0;
+      this.overBudgetWindows = 0;
+      this.underBudgetWindows = 0;
+      this.softwareRendererFallback = false;
+      this.listeners = new Set();
+      this.controls = Array.from(root.querySelectorAll("[data-rr-fidelity]"));
+      this.readout = root.querySelector("[data-rr-fidelity-readout]");
+      this.longTaskObserver = null;
+      if (typeof window.PerformanceObserver === "function") {
+        try {
+          this.longTaskObserver = new window.PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+              if (entry.duration > 50) this.longTaskPressure += 1;
+            });
+          });
+          this.longTaskObserver.observe({ type: "longtask", buffered: true });
+        } catch {
+          this.longTaskObserver = null;
+        }
+      }
+      this.setupControls();
+      this.updateUI();
+    }
+
+    setupControls() {
+      this.controls.forEach((control) => {
+        control.addEventListener("click", () => {
+          const mode = String(control.dataset.rrFidelity || "auto");
+          if (!["auto", "3", "2", "1"].includes(mode)) return;
+          this.setMode(mode);
+        });
+      });
+    }
+
+    onChange(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+
+    setSoftwareRendererFallback(active) {
+      const nextActive = Boolean(active);
+      if (nextActive === this.softwareRendererFallback) return;
+      this.softwareRendererFallback = nextActive;
+      this.costSamples.length = 0;
+      this.longTaskPressure = 0;
+      this.overBudgetWindows = 0;
+      this.underBudgetWindows = 0;
+      this.emitChange();
+      this.scheduler.wake("resizeDirty");
+    }
+
+    setMode(mode) {
+      const nextMode = ["auto", "3", "2", "1"].includes(mode) ? mode : "auto";
+      const previousMode = this.mode;
+      const previousLevel = this.level;
+      this.mode = nextMode;
+      if (nextMode !== "auto") this.level = Number(nextMode);
+      this.session.fidelityMode = nextMode;
+      this.costSamples.length = 0;
+      this.longTaskPressure = 0;
+      this.overBudgetWindows = 0;
+      this.underBudgetWindows = 0;
+      this.updateUI();
+      this.persist(true);
+      if (this.level !== previousLevel || nextMode !== previousMode || nextMode === "auto") this.emitChange();
+      this.scheduler.wake("resizeDirty");
+    }
+
+    profile() {
+      const compact = window.innerWidth < 700;
+      const levelIndex = clamp(this.level - 1, 0, 2);
+      const nodeCounts = compact ? [34, 44, 56] : [52, 72, 92];
+      const dprCaps = compact ? [1, 1.25, 1.5] : [1, 1.5, 2];
+      const resolutionScales = [0.5, 0.75, 1];
+      const refresh = this.scheduler.refreshMeasured ? this.scheduler.refreshHz : 60;
+      const multiplier = [0.5, 0.75, 1][levelIndex];
+      const softwareConstrained = this.softwareRendererFallback && this.mode === "auto";
+      const softwareNodeCaps = compact ? [24, 30, 36] : [28, 36, 44];
+      const softwareTargetCaps = [24, 27, 30];
+      return {
+        level: this.level,
+        nodeCount: softwareConstrained ? Math.min(nodeCounts[levelIndex], softwareNodeCaps[levelIndex]) : nodeCounts[levelIndex],
+        dprCap: softwareConstrained ? Math.min(dprCaps[levelIndex], 1) : dprCaps[levelIndex],
+        resolutionScale: softwareConstrained ? Math.min(resolutionScales[levelIndex], 0.25) : resolutionScales[levelIndex],
+        targetHz: softwareConstrained
+          ? Math.min(Math.max(15, refresh * multiplier), softwareTargetCaps[levelIndex])
+          : Math.max(15, refresh * multiplier),
+        refreshHz: refresh,
+        softwareConstrained,
+      };
+    }
+
+    observePerformance(cost, interval) {
+      if (this.mode !== "auto" || !Number.isFinite(cost) || !Number.isFinite(interval)) return;
+      this.costSamples.push({ cost, interval });
+      if (this.costSamples.length < 18) return;
+      const samples = this.costSamples.splice(0);
+      const averageCost = samples.reduce((sum, sample) => sum + sample.cost, 0) / samples.length;
+      const intervals = samples.map((sample) => sample.interval).sort((first, second) => first - second);
+      const p90Interval = intervals[Math.min(intervals.length - 1, Math.floor(intervals.length * 0.9))];
+      this.costSamples.length = 0;
+      const budget = 1000 / Math.max(30, this.scheduler.refreshHz);
+      const targetInterval = 1000 / Math.max(15, this.profile().targetHz);
+      const overBudget = averageCost > budget * 0.92 || p90Interval > targetInterval * 1.5 || this.longTaskPressure > 1;
+      const underBudget = averageCost < budget * 0.48 && p90Interval < targetInterval * 1.12 && this.longTaskPressure === 0;
+      this.longTaskPressure = 0;
+      this.overBudgetWindows = overBudget ? this.overBudgetWindows + 1 : 0;
+      this.underBudgetWindows = underBudget ? this.underBudgetWindows + 1 : 0;
+      if (this.overBudgetWindows >= 2 && this.level > 1) {
+        this.level -= 1;
+        this.overBudgetWindows = 0;
+        this.underBudgetWindows = 0;
+        this.emitChange();
+      } else if (this.underBudgetWindows >= 6 && this.level < 3) {
+        this.level += 1;
+        this.overBudgetWindows = 0;
+        this.underBudgetWindows = 0;
+        this.emitChange();
+      } else {
+        this.updateUI();
+      }
+    }
+
+    emitChange() {
+      this.updateUI();
+      this.listeners.forEach((listener) => listener(this.profile()));
+    }
+
+    updateUI() {
+      const roman = { 1: "I", 2: "II", 3: "III" }[this.level];
+      const profile = this.profile();
+      this.root.dataset.rrFidelityMode = this.mode;
+      this.root.dataset.rrFidelityLevel = String(this.level);
+      this.root.dataset.rrQuality = { 1: "low", 2: "medium", 3: "high" }[this.level];
+      this.root.dataset.rrLayerBudget = { 1: "full-i", 2: "full-ii", 3: "full-iii" }[this.level];
+      this.root.dataset.rrRenderProfile = profile.softwareConstrained ? "software-auto" : "standard";
+      this.root.dataset.rrSampleRate = String(Math.round(profile.targetHz));
+      this.root.style.setProperty("--rr-fidelity-resolution", profile.resolutionScale.toFixed(2));
+      this.controls.forEach((control) => {
+        const active = String(control.dataset.rrFidelity) === this.mode;
+        control.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      if (this.readout) {
+        const nextText = this.scheduler.refreshMeasured ? `${roman} / ${Math.round(profile.targetHz)} Hz` : `${roman} / measuring Hz`;
+        if (this.readout.textContent !== nextText) this.readout.textContent = nextText;
+      }
+    }
+  }
+
+  class AssemblyController {
+    constructor(root, scheduler, sharedState, fidelity) {
+      this.root = root;
+      this.scheduler = scheduler;
+      this.sharedState = sharedState;
+      this.fidelity = fidelity;
+      this.components = Array.from(root.querySelectorAll("[data-rr-assembly]")).map((element, componentIndex) => {
+        const fragments = Array.from(element.querySelectorAll("[data-rr-assembly-fragment]")).map((fragment, fragmentIndex) => {
+          const random = createRandom(FIXED_SEED ^ hashString(`assembly:${componentIndex}:${fragmentIndex}`));
+          return {
+            element: fragment,
+            scatterX: (random() - 0.5) * 2,
+            scatterY: (random() - 0.5) * 2,
+            scatterAngle: (random() - 0.5) * 2,
+            values: { x: Number.NaN, y: Number.NaN, angle: Number.NaN, depth: Number.NaN, opacity: Number.NaN },
+          };
+        });
+        return {
+          element,
+          anchor:
+            element.dataset.rrAssemblyKind === "book"
+              ? element.querySelector(".rr-book__cover") || element
+              : element.querySelector(".rr-interface__master") || element,
+          fragments,
+          state: "unseen",
+          settledEver: false,
+          visible: false,
+          rect: null,
+          progress: 0,
+          disturbance: 0,
+          disturbedUntil: 0,
+          disturbedAt: 0,
+          lastRecoveryMs: 0,
+          recoverStartedAt: 0,
+          disturbTimer: 0,
+          settleTimer: 0,
+          pointerX: 0.5,
+          pointerY: 0.5,
+        };
+      });
+      this.componentByElement = new Map(this.components.map((component) => [component.element, component]));
+      this.measuredReadings = [];
+      this.geometryPending = false;
+      this.lastSoftwarePaintTime = 0;
+      this.pendingPointer = null;
+      this.measuredPointer = null;
+      this.pendingRecoverAllAt = 0;
+      this.resizeObserver = null;
+      this.intersectionObserver = null;
+      this.unregisterMeasure = this.scheduler.registerMeasure("assembly-geometry", (_time, _delta, dirty) => this.measure(dirty));
+      this.unregisterFrame = this.scheduler.register("assembly", (time, delta, dirty) => this.tick(time, delta, dirty));
+      this.setupObservers();
+      this.scheduler.wake("assemblyDirty");
+    }
+
+    setupObservers() {
+      if (typeof window.IntersectionObserver === "function") {
+        this.intersectionObserver = new window.IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              const component = this.componentByElement.get(entry.target);
+              if (component) component.visible = entry.isIntersecting || entry.intersectionRatio > 0;
+            });
+            this.scheduler.wake("assemblyDirty");
+          },
+          { rootMargin: "20% 0px 20% 0px", threshold: [0, 0.01, 0.25, 0.75, 1] }
+        );
+        this.components.forEach((component) => this.intersectionObserver.observe(component.element));
+      }
+
+      if (typeof window.ResizeObserver === "function") {
+        this.resizeObserver = new window.ResizeObserver(() => this.scheduler.wake("resizeDirty"));
+        this.components.forEach((component) => this.resizeObserver.observe(component.element));
+      }
+    }
+
+    componentFromTarget(target) {
+      if (!(target instanceof Element)) return null;
+      const element = target.closest("[data-rr-assembly]");
+      return element ? this.componentByElement.get(element) || null : null;
+    }
+
+    measure(dirty) {
+      if (dirty.has("viewportDirty") || dirty.has("resizeDirty") || dirty.has("assemblyDirty")) {
+        this.measuredReadings = this.components.map((component) => ({
+          component,
+          rect: component.anchor.getBoundingClientRect(),
+        }));
+        this.geometryPending = true;
+      }
+      if (dirty.has("pointerDirty")) {
+        const pending = this.pendingPointer;
+        this.pendingPointer = null;
+        this.measuredPointer = pending
+          ? {
+              ...pending,
+              bounds: pending.component.element.getBoundingClientRect(),
+            }
+          : null;
+      }
+    }
+
+    disturb(component, strength, time) {
+      window.clearTimeout(component.disturbTimer);
+      window.clearTimeout(component.settleTimer);
+      component.state = "disturbed";
+      component.disturbance = Math.max(component.disturbance, clamp(strength, 0.18, 1));
+      component.disturbedAt = performance.now();
+      // Keep the disturbance perceptible, but leave enough of the 400 ms
+      // interaction budget for the eased return even on a throttled frame.
+      component.disturbedUntil = time + 64;
+      component.recoverStartedAt = 0;
+      component.element.dataset.rrAssembly = "disturbed";
+      component.element.classList.add("rr-is-moving");
+      component.disturbTimer = window.setTimeout(() => {
+        if (component.state === "disturbed") this.beginRecovery(component, performance.now());
+      }, 64);
+      this.scheduler.wake("assemblyDirty");
+    }
+
+    handlePointer(target, pointer, speed, time) {
+      const component = this.componentFromTarget(target);
+      this.pendingPointer =
+        component && component.settledEver && !this.sharedState.readerOpen
+          ? {
+              component,
+              x: pointer.x,
+              y: pointer.y,
+              speed,
+              time,
+            }
+          : null;
+    }
+
+    applyMeasuredPointer() {
+      const reading = this.measuredPointer;
+      this.measuredPointer = null;
+      if (!reading || this.sharedState.readerOpen) return;
+      const { component, bounds, x, y, speed, time } = reading;
+      component.pointerX = clamp((x - bounds.left) / Math.max(1, bounds.width), 0, 1);
+      component.pointerY = clamp((y - bounds.top) / Math.max(1, bounds.height), 0, 1);
+      component.element.style.setProperty("--rr-assembly-glow-x", `${(component.pointerX * 100).toFixed(2)}%`);
+      component.element.style.setProperty("--rr-assembly-glow-y", `${(component.pointerY * 100).toFixed(2)}%`);
+      component.element.style.setProperty("--rr-assembly-glow", clamp(speed / 14, 0.08, 0.42).toFixed(3));
+
+      if (!this.sharedState.motionActive || speed < 12) {
+        if (component.state === "disturbed") this.beginRecovery(component, time);
+        return;
+      }
+
+      this.disturb(component, (speed - 12) / 34, time);
+    }
+
+    recoverAll(time = performance.now()) {
+      this.pendingPointer = null;
+      this.pendingRecoverAllAt = time;
+      this.scheduler.wake("assemblyDirty");
+    }
+
+    beginRecovery(component, time) {
+      window.clearTimeout(component.disturbTimer);
+      component.disturbTimer = 0;
+      window.clearTimeout(component.settleTimer);
+      component.state = "recovering";
+      component.recoverStartedAt = time;
+      component.element.dataset.rrAssembly = "recovering";
+      component.element.classList.add("rr-is-moving");
+      component.fragments.forEach((fragment) => {
+        this.writeFragment(fragment, { x: 0, y: 0, angle: 0, depth: 0, opacity: 0 });
+      });
+      component.settleTimer = window.setTimeout(() => {
+        if (component.state === "recovering") this.settle(component);
+      }, 160);
+      this.scheduler.wake("assemblyDirty");
+    }
+
+    settle(component) {
+      const previousState = component.state;
+      window.clearTimeout(component.disturbTimer);
+      window.clearTimeout(component.settleTimer);
+      component.disturbTimer = 0;
+      component.settleTimer = 0;
+      if ((previousState === "disturbed" || previousState === "recovering") && component.disturbedAt > 0) {
+        component.lastRecoveryMs = performance.now() - component.disturbedAt;
+      }
+      component.state = "settled";
+      component.settledEver = true;
+      component.progress = 1;
+      component.disturbance = 0;
+      component.disturbedUntil = 0;
+      component.disturbedAt = 0;
+      component.recoverStartedAt = 0;
+      component.element.dataset.rrAssembly = "settled";
+      component.element.classList.remove("rr-is-moving");
+      component.element.classList.add("rr-is-assembled");
+    }
+
+    writeFragment(fragment, next) {
+      const previous = fragment.values;
+      if (
+        Math.abs(previous.x - next.x) < 0.01 &&
+        Math.abs(previous.y - next.y) < 0.01 &&
+        Math.abs(previous.angle - next.angle) < 0.002 &&
+        Math.abs(previous.depth - next.depth) < 0.002 &&
+        Math.abs(previous.opacity - next.opacity) < 0.01
+      ) {
+        return;
+      }
+      fragment.values = next;
+      fragment.element.style.setProperty("--rr-fragment-x", `${next.x.toFixed(2)}px`);
+      fragment.element.style.setProperty("--rr-fragment-y", `${next.y.toFixed(2)}px`);
+      fragment.element.style.setProperty("--rr-fragment-angle", `${next.angle.toFixed(3)}deg`);
+      fragment.element.style.setProperty("--rr-fragment-depth", next.depth.toFixed(3));
+      fragment.element.style.setProperty("--rr-fragment-opacity", next.opacity.toFixed(2));
+    }
+
+    tick(time, _delta, dirty) {
+      if (this.sharedState.readerOpen) return false;
+      const geometryDirty = this.geometryPending || dirty.has("viewportDirty") || dirty.has("resizeDirty") || dirty.has("assemblyDirty");
+      const viewportHeight = Math.max(1, window.innerHeight);
+      const reduced = !this.sharedState.motionActive || this.sharedState.stableMode;
+      const newlySettled = new Set();
+      const profile = this.fidelity.profile();
+      const interactive =
+        dirty.has("pointerDirty") || this.pendingRecoverAllAt || this.components.some(({ state }) => state === "disturbed" || state === "recovering");
+      if (profile.softwareConstrained && geometryDirty && !interactive) {
+        const interval = 1000 / Math.max(15, profile.targetHz);
+        if (this.lastSoftwarePaintTime && time - this.lastSoftwarePaintTime < interval - 0.35) return true;
+        this.lastSoftwarePaintTime = time;
+      }
+
+      if (dirty.has("pointerDirty")) this.applyMeasuredPointer();
+      if (this.pendingRecoverAllAt) {
+        const recoveryTime = this.pendingRecoverAllAt;
+        this.pendingRecoverAllAt = 0;
+        this.components.forEach((component) => {
+          if (component.state === "disturbed") this.beginRecovery(component, recoveryTime);
+        });
+      }
+
+      if (geometryDirty) {
+        const readings = this.measuredReadings;
+        this.geometryPending = false;
+        this.measuredReadings = [];
+        readings.forEach(({ component, rect }) => {
+          component.rect = rect;
+          component.visible = rect.bottom > -viewportHeight * 0.2 && rect.top < viewportHeight * 1.2;
+          if (component.settledEver || component.state === "disturbed" || component.state === "recovering") return;
+
+          const center = rect.top + rect.height * 0.5;
+          const startLine = viewportHeight * 1.04;
+          // Finish slightly before the contractual 66.7vh boundary. A small
+          // lead prevents sub-pixel reflow at wide breakpoints from leaving a
+          // cover one frame short of its terminal state on the boundary.
+          const settleLine = viewportHeight * 0.7;
+          const reachedSettleLine = center <= settleLine + 1;
+          const localProgress = reachedSettleLine ? 1 : clamp((startLine - center) / Math.max(1, startLine - settleLine), 0, 1);
+          component.progress = reduced && rect.top < viewportHeight * 1.2 ? 1 : localProgress;
+          if (component.progress > 0 && component.progress < 1) {
+            component.state = "assembling";
+            component.element.dataset.rrAssembly = "assembling";
+            component.element.classList.add("rr-is-moving");
+          } else if (component.progress >= 1) {
+            this.settle(component);
+            newlySettled.add(component);
+          }
+        });
+        if (
+          dirty.has("viewportDirty") &&
+          window.innerWidth < 700 &&
+          this.sharedState.motionActive &&
+          Math.abs(this.sharedState.scrollVelocity) > 18
+        ) {
+          readings.forEach(({ component, rect }) => {
+            if (
+              !component.settledEver ||
+              newlySettled.has(component) ||
+              component.element.dataset.rrAssemblyKind !== "book" ||
+              rect.bottom <= 0 ||
+              rect.top >= viewportHeight
+            ) {
+              return;
+            }
+            component.pointerX = 0.5;
+            component.pointerY = clamp((viewportHeight * 0.55 - rect.top) / Math.max(1, rect.height), 0, 1);
+            this.disturb(component, (Math.abs(this.sharedState.scrollVelocity) - 18) / 52, time);
+          });
+        }
+      }
+
+      let continuing = false;
+      this.components.forEach((component) => {
+        if (reduced && component.visible && !component.settledEver) this.settle(component);
+        let disassembly = component.settledEver ? 0 : 1 - ease(component.progress);
+        let disturbance = 0;
+
+        if (component.state === "disturbed") {
+          if (time >= component.disturbedUntil) {
+            this.beginRecovery(component, time);
+          } else {
+            disturbance = component.disturbance;
+          }
+        }
+        if (component.state === "recovering") {
+          disturbance = 0;
+        }
+
+        if (component.state === "assembling") disassembly = 1 - ease(component.progress);
+        if (component.state === "settled") disassembly = 0;
+        if (profile.softwareConstrained && disassembly > 0 && disassembly < 1) {
+          disassembly = Math.round(disassembly * 32) / 32;
+        }
+        const activeAmount = Math.max(disassembly, disturbance);
+        const compactScale = window.innerWidth < 700 ? 0.72 : 1;
+        component.fragments.forEach((fragment, index) => {
+          const fragmentX = (index % 2) * 0.52 + 0.24;
+          const fragmentY = Math.floor(index / 2) * 0.42 + 0.24;
+          const localDistance = Math.hypot(component.pointerX - fragmentX, component.pointerY - fragmentY);
+          const localBias = ease(clamp(1 - localDistance / 0.58, 0, 1));
+          const disturbanceScale = disturbance > 0 ? localBias : 1;
+          const x = fragment.scatterX * 74 * compactScale * activeAmount * disturbanceScale;
+          const y = fragment.scatterY * 48 * compactScale * activeAmount * disturbanceScale;
+          const angle = fragment.scatterAngle * 2.4 * activeAmount * disturbanceScale;
+          const depth = activeAmount * (0.24 + (index % 3) * 0.04) * disturbanceScale;
+          const opacity = component.state === "settled" ? 0 : clamp(activeAmount * 1.18 * disturbanceScale, 0, 1);
+          this.writeFragment(fragment, { x, y, angle, depth, opacity });
+        });
+
+        if (component.state === "settled") {
+          component.fragments.forEach((fragment) => {
+            this.writeFragment(fragment, { x: 0, y: 0, angle: 0, depth: 0, opacity: 0 });
+          });
+        }
+      });
+
+      return continuing;
+    }
+
+    snapshot() {
+      return this.components.map((component) => ({
+        id: component.element.dataset.rrBook || component.element.dataset.rrAssemblyKind || "assembly",
+        state: component.state,
+        settledEver: component.settledEver,
+        progress: Number(component.progress.toFixed(4)),
+        lastRecoveryMs: Number(component.lastRecoveryMs.toFixed(2)),
+        fragments: component.fragments.map((fragment) => ({
+          x: Number((fragment.values.x || 0).toFixed(3)),
+          y: Number((fragment.values.y || 0).toFixed(3)),
+          angle: Number((fragment.values.angle || 0).toFixed(3)),
+          depth: Number((fragment.values.depth || 0).toFixed(3)),
+        })),
+      }));
+    }
+  }
+
+  class CollisionEvidenceController {
+    constructor(root, scheduler, sharedState, fidelity) {
+      this.root = root;
+      this.scheduler = scheduler;
+      this.sharedState = sharedState;
+      this.fidelity = fidelity;
+      this.stage = root.querySelector("[data-rr-collision-evidence]");
+      this.viewport = this.stage ? this.stage.querySelector(".rr-collision__evidence-viewport") : null;
+      this.track = this.stage ? this.stage.querySelector("[data-rr-evidence-track]") : null;
+      this.items = this.track ? Array.from(this.track.querySelectorAll("[data-rr-evidence]")) : [];
+      this.visible = false;
+      this.progress = 0;
+      this.distanceVh = 220;
+      this.targetDistanceVh = 220;
+      this.distanceLocked = false;
+      this.measurement = null;
+      this.lastSoftwarePaintTime = 0;
+      this.styleCache = new WeakMap();
+      this.mobile = window.matchMedia("(max-width: 700px)");
+      this.intersectionObserver = null;
+      if (!this.stage || !this.viewport || !this.track || !this.items.length) return;
+
+      if (typeof window.IntersectionObserver === "function") {
+        this.intersectionObserver = new window.IntersectionObserver(
+          (entries) => {
+            this.visible = entries.some((entry) => entry.isIntersecting || entry.intersectionRatio > 0);
+            if (this.visible) {
+              this.items.forEach((item) => {
+                const image = item.querySelector("img[loading='lazy']");
+                if (image) image.loading = "eager";
+              });
+            }
+            this.scheduler.wake("collisionDirty");
+          },
+          { rootMargin: "15% 0px 15% 0px", threshold: [0, 0.01, 0.5] }
+        );
+        this.intersectionObserver.observe(this.stage);
+      } else {
+        this.visible = true;
+      }
+      this.track.addEventListener("scroll", () => this.scheduler.wake("collisionDirty"), { passive: true });
+      this.scheduler.registerMeasure("collision-geometry", (_time, _delta, dirty) => this.measure(dirty));
+      this.scheduler.register("collision", (time, _delta, dirty) => this.tick(time, dirty));
+      this.scheduler.wake("collisionDirty");
+    }
+
+    measure(dirty) {
+      if (!dirty.has("viewportDirty") && !dirty.has("resizeDirty") && !dirty.has("collisionDirty")) return;
+      if (!this.visible) {
+        this.measurement = null;
+        return;
+      }
+      const mobile = this.mobile.matches;
+      const stageBounds = this.stage.getBoundingClientRect();
+      const viewportBounds = this.viewport.getBoundingClientRect();
+      this.measurement = {
+        mobile,
+        stageBounds,
+        viewportBounds,
+        viewportHeight: Math.max(1, window.innerHeight),
+        trackScrollLeft: this.track.scrollLeft,
+        trackScrollWidth: this.track.scrollWidth,
+        trackClientWidth: this.track.clientWidth,
+        viewportClientWidth: this.viewport.clientWidth,
+        items: this.items.map((item) => ({
+          offsetLeft: item.offsetLeft,
+          offsetWidth: item.offsetWidth,
+        })),
+      };
+    }
+
+    lifecycle(local) {
+      if (local <= 0) return { state: "queued", reveal: 0 };
+      if (local < 0.2) return { state: "scanning", reveal: ease(local / 0.2) };
+      if (local < 0.36) return { state: "revealed", reveal: 1 };
+      if (local < 0.7) return { state: "holding", reveal: 1 };
+      if (local < 1) return { state: "receding", reveal: 1 - ease((local - 0.7) / 0.3) };
+      return { state: "passed", reveal: 0 };
+    }
+
+    setProgress(progress) {
+      this.progress = clamp(progress, 0, 1);
+      const progressData = this.progress.toFixed(4);
+      if (this.stage.dataset.rrEvidenceProgress !== progressData) this.stage.dataset.rrEvidenceProgress = progressData;
+      const span = this.items.length + 1.15;
+      this.items.forEach((item, index) => {
+        const local = this.progress * span - index;
+        this.applyLifecycle(item, local);
+      });
+    }
+
+    applyLifecycle(item, local) {
+      const lifecycle = this.lifecycle(local);
+      const softwareConstrained = this.fidelity.profile().softwareConstrained;
+      const reveal = softwareConstrained ? Math.round(lifecycle.reveal * 12) / 12 : lifecycle.reveal;
+      const scan = clamp(local / 0.2, 0, 1);
+      const scanPosition = softwareConstrained ? Math.round(scan * 12) / 12 : scan;
+      const next = {
+        state: lifecycle.state,
+        reveal: reveal.toFixed(4),
+        clip: `inset(0 ${(100 - reveal * 100).toFixed(2)}% 0 0)`,
+        opacity: clamp(reveal * 1.12, 0, 1).toFixed(3),
+        brightness: (0.76 + reveal * 0.24).toFixed(3),
+        scanPosition: `${(scanPosition * 100).toFixed(2)}%`,
+      };
+      const previous = this.styleCache.get(item) || {};
+      if (previous.state !== next.state) item.dataset.rrEvidenceState = next.state;
+      if (previous.reveal !== next.reveal) item.style.setProperty("--rr-evidence-reveal", next.reveal);
+      if (previous.clip !== next.clip) item.style.setProperty("--rr-evidence-clip", next.clip);
+      if (previous.opacity !== next.opacity) item.style.setProperty("--rr-evidence-opacity", next.opacity);
+      if (previous.brightness !== next.brightness) item.style.setProperty("--rr-evidence-brightness", next.brightness);
+      if (previous.scanPosition !== next.scanPosition) item.style.setProperty("--rr-evidence-scan-position", next.scanPosition);
+      this.styleCache.set(item, next);
+    }
+
+    setMobileProgress(measurement) {
+      const maximum = Math.max(1, measurement.trackScrollWidth - measurement.trackClientWidth);
+      this.progress = clamp(measurement.trackScrollLeft / maximum, 0, 1);
+      this.stage.dataset.rrEvidenceProgress = this.progress.toFixed(4);
+      const center = measurement.trackScrollLeft + measurement.trackClientWidth * 0.5;
+      this.items.forEach((item, index) => {
+        const itemGeometry = measurement.items[index];
+        const itemCenter = itemGeometry.offsetLeft + itemGeometry.offsetWidth * 0.5;
+        const local = 0.55 + (center - itemCenter) / Math.max(1, itemGeometry.offsetWidth);
+        this.applyLifecycle(item, local);
+      });
+    }
+
+    tick(time, dirty) {
+      if (!this.stage || this.sharedState.readerOpen || document.hidden) return false;
+      if (!this.measurement && !dirty.has("viewportDirty") && !dirty.has("resizeDirty") && !dirty.has("collisionDirty")) return false;
+      if (!this.visible) {
+        this.measurement = null;
+        return false;
+      }
+      const measurement = this.measurement;
+      if (!measurement) return false;
+      const profile = this.fidelity.profile();
+      if (profile.softwareConstrained) {
+        const interval = 1000 / Math.max(15, profile.targetHz);
+        if (this.lastSoftwarePaintTime && time - this.lastSoftwarePaintTime < interval - 0.35) return true;
+        this.lastSoftwarePaintTime = time;
+      }
+      this.measurement = null;
+      if (measurement.mobile) {
+        this.setMobileProgress(measurement);
+        this.track.style.removeProperty("--rr-evidence-translate");
+        return false;
+      }
+
+      const { stageBounds, viewportBounds, viewportHeight } = measurement;
+      const navOffset = Math.max(0, viewportBounds.top);
+
+      if (!this.distanceLocked && stageBounds.top < viewportHeight * 1.25) {
+        const speed = clamp((Math.abs(this.sharedState.scrollVelocity || 0) - 3) / 55, 0, 1);
+        const candidate = 300 - ease(speed) * 200;
+        if (Math.abs(candidate - this.targetDistanceVh) > 8) this.targetDistanceVh = candidate;
+        const previousDistance = this.distanceVh;
+        if (stageBounds.top <= navOffset) {
+          this.distanceVh = this.targetDistanceVh;
+          this.distanceLocked = true;
+        } else {
+          this.distanceVh = lerp(this.distanceVh, this.targetDistanceVh, 0.24);
+          if (Math.abs(this.distanceVh - this.targetDistanceVh) < 0.6) this.distanceVh = this.targetDistanceVh;
+        }
+        if (Math.abs(previousDistance - this.distanceVh) > 0.05) {
+          this.stage.style.setProperty("--rr-collision-distance", `${this.distanceVh.toFixed(2)}svh`);
+          this.scheduler.wake("resizeDirty");
+        }
+      }
+
+      const travel = Math.max(1, stageBounds.height - viewportBounds.height);
+      const progress = clamp((navOffset - stageBounds.top) / travel, 0, 1);
+      const maximum = Math.max(0, measurement.trackScrollWidth - measurement.viewportClientWidth);
+      const translate = `${(-progress * maximum).toFixed(profile.softwareConstrained ? 0 : 2)}px`;
+      if (this.track.style.getPropertyValue("--rr-evidence-translate") !== translate) {
+        this.track.style.setProperty("--rr-evidence-translate", translate);
+      }
+      this.setProgress(progress);
+      this.visible = stageBounds.bottom > 0 && stageBounds.top < viewportHeight;
+      return false;
+    }
+
+    snapshot() {
+      return {
+        progress: Number(this.progress.toFixed(4)),
+        distanceVh: Number(this.distanceVh.toFixed(2)),
+        targetDistanceVh: Number(this.targetDistanceVh.toFixed(2)),
+        distanceLocked: this.distanceLocked,
+        mobile: this.mobile.matches,
+        visible: this.visible,
+        states: this.items.map((item) => item.dataset.rrEvidenceState || "queued"),
+      };
+    }
+  }
+
   class WebGLDynamicLayer {
     constructor(root) {
       this.root = root;
       this.canvas = document.createElement("canvas");
+      this.canvas.className = "rr-hero__webgl";
+      this.canvas.dataset.rrWebglLayer = "";
+      this.canvas.setAttribute("aria-hidden", "true");
+      const fieldCanvas = root.querySelector("[data-rr-field]");
+      if (fieldCanvas?.parentNode) fieldCanvas.parentNode.insertBefore(this.canvas, fieldCanvas);
       this.context = null;
       this.program = null;
       this.positionBuffer = null;
@@ -114,6 +1004,9 @@
       this.renderCount = 0;
       this.sampleAlpha = 0;
       this.version = null;
+      this.debugSampling = new URLSearchParams(window.location.search).has("rr-debug");
+      this.forceSoftwareRenderer = new URLSearchParams(window.location.search).has("rr-force-webgl");
+      this.rendererName = "";
 
       this.handleContextLost = this.handleContextLost.bind(this);
       this.handleContextRestored = this.handleContextRestored.bind(this);
@@ -149,6 +1042,14 @@
         const context = this.canvas.getContext("webgl", options) || this.canvas.getContext("experimental-webgl", options);
         if (!context) {
           this.fail("unavailable");
+          return;
+        }
+        const rendererExtension = context.getExtension("WEBGL_debug_renderer_info");
+        this.rendererName = String(
+          rendererExtension ? context.getParameter(rendererExtension.UNMASKED_RENDERER_WEBGL) : context.getParameter(context.RENDERER) || ""
+        );
+        if (!this.forceSoftwareRenderer && /(swiftshader|llvmpipe|software rasterizer|basic render)/i.test(this.rendererName)) {
+          this.fail("software-renderer");
           return;
         }
 
@@ -274,6 +1175,7 @@
         this.fallbackReason = "none";
         this.root.dataset.rrWebgl = "available";
         this.root.dataset.rrRenderer = "hybrid-webgl";
+        this.canvas.hidden = false;
       } catch {
         this.fail("init-failed");
       }
@@ -286,6 +1188,7 @@
       this.program = null;
       this.positionBuffer = null;
       this.sampleAlpha = 0;
+      this.canvas.hidden = true;
       this.root.dataset.rrWebgl = reason === "context-lost" ? "lost" : "unavailable";
       this.root.dataset.rrRenderer = "2d-fallback";
     }
@@ -328,7 +1231,7 @@
         context.drawArrays(context.TRIANGLE_STRIP, 0, 4);
         this.renderCount += 1;
 
-        if (this.renderCount === 1 || this.renderCount % 120 === 0) {
+        if (this.debugSampling && (this.renderCount === 1 || this.renderCount % 120 === 0)) {
           const pixel = new Uint8Array(4);
           context.readPixels(
             Math.max(0, Math.floor(this.canvas.width * 0.5)),
@@ -360,12 +1263,15 @@
   }
 
   class RhizomeField {
-    constructor(canvas, root, sharedState) {
+    constructor(canvas, root, sharedState, scheduler, fidelity) {
       this.canvas = canvas;
       this.root = root;
       this.sharedState = sharedState;
+      this.scheduler = scheduler;
+      this.fidelity = fidelity;
       this.context = canvas.getContext("2d", { alpha: true, desynchronized: true });
       this.webglLayer = this.context ? new WebGLDynamicLayer(root) : null;
+      this.fidelity.setSoftwareRendererFallback(this.webglLayer?.fallbackReason === "software-renderer" && !this.sharedState.stableMode);
       this.width = 1;
       this.height = 1;
       this.offsetLeft = 0;
@@ -374,10 +1280,11 @@
       this.nodes = [];
       this.edges = [];
       this.quality = 2;
-      this.frameHandle = 0;
       this.lastFrame = 0;
       this.lastRafTime = 0;
       this.lastSampleTime = 0;
+      this.sampleAccumulator = 0;
+      this.recentRenderIntervals = [];
       this.averageFrame = 16.7;
       this.sampledFrames = 0;
       this.frameCallbacks = 0;
@@ -404,11 +1311,20 @@
       this.resize = this.resize.bind(this);
       this.frame = this.frame.bind(this);
       this.handleVisibility = this.handleVisibility.bind(this);
+      this.unregisterFrame = this.scheduler.register("field", this.frame);
+      this.unregisterFidelity = this.fidelity.onChange(() => {
+        this.recentRenderIntervals.length = 0;
+        this.lastFrame = 0;
+        this.lastSampleTime = 0;
+        this.sampleAccumulator = 0;
+        this.resize(false);
+        this.scheduler.wake("resizeDirty");
+      });
       if (typeof window.ResizeObserver === "function") {
-        this.resizeObserver = new window.ResizeObserver(this.resize);
+        this.resizeObserver = new window.ResizeObserver(() => this.scheduler.wake("resizeDirty"));
         this.resizeObserver.observe(canvas);
       }
-      window.addEventListener("resize", this.resize, { passive: true });
+      window.addEventListener("resize", () => this.scheduler.wake("resizeDirty"), { passive: true });
       document.addEventListener("visibilitychange", this.handleVisibility);
       this.resize();
     }
@@ -418,28 +1334,22 @@
     }
 
     targetNodeCount() {
-      const compact = this.width < 700;
-      const counts = compact ? [34, 44, 56] : [52, 72, 92];
-      const dprPenalty = this.dpr > 1.75 ? 1 : 0;
-      return counts[Math.max(0, this.quality - dprPenalty)];
+      return this.fidelity.profile().nodeCount;
     }
 
     sampleInterval() {
-      return [50, 1000 / 30, 0][this.quality];
+      return 1000 / Math.max(15, this.fidelity.profile().targetHz);
     }
 
     updateQualityState() {
-      const names = ["low", "medium", "high"];
-      const layerBudgets = ["minimal", "reduced", "full"];
+      const profile = this.fidelity.profile();
       const interval = this.sampleInterval();
-      this.root.dataset.rrQuality = names[this.quality];
-      this.root.dataset.rrLayerBudget = layerBudgets[this.quality];
-      this.root.dataset.rrSampleRate = interval > 0 ? String(Math.round(1000 / interval)) : "display";
-      this.root.style.setProperty("--rr-quality-layer-opacity", [0.42, 0.7, 1][this.quality].toFixed(2));
+      this.quality = profile.level - 1;
+      this.root.dataset.rrSampleRate = String(Math.round(profile.targetHz));
       this.root.style.setProperty("--rr-quality-sample-interval", `${interval.toFixed(2)}ms`);
     }
 
-    resize() {
+    resize(drawAfter = true) {
       if (!this.context) return;
 
       const bounds = this.canvas.getBoundingClientRect();
@@ -447,9 +1357,11 @@
       this.offsetTop = bounds.top;
       this.width = Math.max(1, Math.round(bounds.width || window.innerWidth));
       this.height = Math.max(1, Math.round(bounds.height || window.innerHeight));
-      const mobileCap = this.width < 700 ? 1.5 : 2;
+      const fidelityCap = this.fidelity.profile().dprCap;
+      const resolutionScale = this.fidelity.profile().resolutionScale;
       const memoryCap = 4096 / Math.max(this.width, this.height);
-      this.dpr = clamp(window.devicePixelRatio || 1, 1, Math.min(mobileCap, memoryCap));
+      const nativeRatio = clamp(window.devicePixelRatio || 1, 1, Math.min(fidelityCap, memoryCap));
+      this.dpr = clamp(nativeRatio * resolutionScale, 0.5, Math.min(fidelityCap, memoryCap));
       const pixelWidth = Math.max(1, Math.round(this.width * this.dpr));
       const pixelHeight = Math.max(1, Math.round(this.height * this.dpr));
 
@@ -461,7 +1373,9 @@
       if (this.webglLayer) this.webglLayer.resize(pixelWidth, pixelHeight);
       this.context.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
       this.generate();
-      this.draw(this.sharedState.stableMode ? STABLE_FRAME_TIME : performance.now());
+      if (drawAfter && this.sharedState.heroVisible !== false) {
+        this.draw(this.sharedState.stableMode ? STABLE_FRAME_TIME : performance.now());
+      }
     }
 
     updateOffset() {
@@ -471,6 +1385,7 @@
     }
 
     generate() {
+      this.quality = this.fidelity.profile().level - 1;
       const random = createRandom(FIXED_SEED + this.quality * 97 + (this.width < 700 ? 1 : 0));
       const count = this.targetNodeCount();
       const nodes = [];
@@ -758,8 +1673,7 @@
       context.lineCap = "round";
       context.lineJoin = "round";
 
-      const webglDrawn =
-        this.webglLayer &&
+      if (this.webglLayer) {
         this.webglLayer.render(time, {
           chapter,
           height: this.height,
@@ -770,11 +1684,6 @@
           tilt: this.sharedState.tilt,
           width: this.width,
         });
-      if (webglDrawn) {
-        context.save();
-        context.globalCompositeOperation = "screen";
-        context.drawImage(this.webglLayer.canvas, 0, 0, this.width, this.height);
-        context.restore();
       }
 
       this.edges.forEach((edge) => {
@@ -821,47 +1730,47 @@
       this.root.style.setProperty("--rr-collision-flash", shouldActivate ? "1" : "0");
     }
 
-    adaptQuality(delta) {
-      if (!this.sharedState.motionActive || this.sharedState.stableMode) return;
-      this.averageFrame = lerp(this.averageFrame, delta, 0.035);
-      this.sampledFrames += 1;
-      if (this.sampledFrames < 120) return;
-      this.sampledFrames = 0;
-
-      if (this.averageFrame > 25 && this.quality > 0) {
-        this.quality -= 1;
-        this.generate();
-      } else if (this.averageFrame < 17.2 && this.quality < 2) {
-        this.quality += 1;
-        this.generate();
+    frame(time, schedulerDelta, dirty) {
+      if (dirty.has("resizeDirty")) this.resize(false);
+      if (
+        !this.running ||
+        document.hidden ||
+        !this.context ||
+        !this.sharedState.motionActive ||
+        !this.sharedState.heroVisible ||
+        this.sharedState.readerOpen
+      ) {
+        return false;
       }
-    }
-
-    frame(time) {
-      if (!this.running || document.hidden || !this.context) return;
       this.frameCallbacks += 1;
-      const rafDelta = this.lastRafTime ? clamp(time - this.lastRafTime, 1, 100) : 16.7;
+      const rafDelta = this.lastRafTime ? clamp(time - this.lastRafTime, 1, 100) : schedulerDelta;
       this.lastRafTime = time;
-      this.adaptQuality(rafDelta);
+      this.averageFrame = lerp(this.averageFrame, rafDelta, 0.035);
       const sampleInterval = this.sampleInterval();
-      if (sampleInterval > 0 && this.lastSampleTime && time - this.lastSampleTime < sampleInterval - 0.5) {
+      this.sampleAccumulator = Math.min(sampleInterval * 2, this.sampleAccumulator + rafDelta);
+      if (this.sampleAccumulator < sampleInterval - 0.35) {
         this.skippedFrames += 1;
-        this.frameHandle = window.requestAnimationFrame(this.frame);
-        return;
+        return true;
       }
+      this.sampleAccumulator = Math.max(0, this.sampleAccumulator - sampleInterval);
 
       const delta = this.lastFrame ? clamp(time - this.lastFrame, 1, 50) : 16.7;
       this.lastFrame = time;
+      if (this.lastSampleTime) {
+        this.recentRenderIntervals.push(time - this.lastSampleTime);
+        if (this.recentRenderIntervals.length > 180) this.recentRenderIntervals.shift();
+      }
       this.lastSampleTime = time;
+      const renderStartedAt = performance.now();
       this.updateNodes(time, delta);
-      this.sharedState.updateFragments(time, delta);
       if (this.sharedState.pointer.active) {
         const nearest = this.sampleNearestNode(this.sharedState.pointer.x, this.sharedState.pointer.y);
         this.sharedState.updateNearestCursor(nearest);
       }
       this.draw(time);
       this.renderedFrames += 1;
-      this.frameHandle = window.requestAnimationFrame(this.frame);
+      this.fidelity.observePerformance(performance.now() - renderStartedAt, rafDelta);
+      return true;
     }
 
     start() {
@@ -870,15 +1779,12 @@
       this.lastFrame = 0;
       this.lastRafTime = 0;
       this.lastSampleTime = 0;
-      this.frameHandle = window.requestAnimationFrame(this.frame);
+      this.sampleAccumulator = 0;
+      this.scheduler.wake("viewportDirty");
     }
 
     stop() {
       this.running = false;
-      if (this.frameHandle) {
-        window.cancelAnimationFrame(this.frameHandle);
-        this.frameHandle = 0;
-      }
       this.setCollisionState(false);
     }
 
@@ -898,7 +1804,6 @@
         });
       }
       this.updateNodes(time, 16.7);
-      this.sharedState.updateFragments(time, 16.7, true);
       if (this.sharedState.pointer.active) {
         const nearest = this.sampleNearestNode(this.sharedState.pointer.x, this.sharedState.pointer.y);
         this.sharedState.updateNearestCursor(nearest);
@@ -908,7 +1813,7 @@
 
     invalidate() {
       if (!this.context) return;
-      if (this.sharedState.motionActive && !this.sharedState.stableMode) {
+      if (this.sharedState.motionActive && !this.sharedState.stableMode && this.sharedState.heroVisible && !this.sharedState.readerOpen) {
         this.start();
       } else {
         this.freeze(STABLE_FRAME_TIME);
@@ -920,17 +1825,25 @@
         this.stop();
       } else {
         this.invalidate();
+        this.scheduler.wake("viewportDirty");
       }
+    }
+
+    resetPerformanceWindow() {
+      this.recentRenderIntervals.length = 0;
+      this.lastSampleTime = 0;
     }
 
     snapshotMetrics() {
       const interval = this.sampleInterval();
+      const renderIntervals = [...this.recentRenderIntervals].sort((first, second) => first - second);
+      const renderP90Index = Math.min(renderIntervals.length - 1, Math.floor(renderIntervals.length * 0.9));
       let nodeChecksum = 0;
       let fieldEnergy = 0;
       this.nodes.forEach((node, index) => {
         const baseX = node.normalizedX * this.width;
         const baseY = node.normalizedY * this.height;
-        nodeChecksum += node.x * (index + 3) * 0.001937 + node.y * (index + 7) * 0.001123;
+        nodeChecksum += (node.x / Math.max(1, this.width)) * (index + 3) * 1.937 + (node.y / Math.max(1, this.height)) * (index + 7) * 1.123;
         fieldEnergy += Math.hypot(node.x - baseX, node.y - baseY);
       });
       fieldEnergy /= Math.max(1, this.nodes.length);
@@ -942,6 +1855,10 @@
           draws: this.drawCalls,
           webgl: this.webglLayer ? this.webglLayer.renderCount : 0,
           averageMs: Number(this.averageFrame.toFixed(2)),
+          cadence: {
+            samples: renderIntervals.length,
+            p90Ms: renderIntervals.length ? Number(renderIntervals[renderP90Index].toFixed(2)) : null,
+          },
         },
         sample: {
           quality: this.root.dataset.rrQuality || "unknown",
@@ -952,6 +1869,7 @@
           fieldEnergy: Number(fieldEnergy.toFixed(4)),
           webglAlpha: this.webglLayer ? this.webglLayer.sampleAlpha : 0,
           webglFallback: this.webglLayer ? this.webglLayer.fallbackReason : "unavailable",
+          webglRenderer: this.webglLayer ? this.webglLayer.rendererName : "",
           contextLost: this.webglLayer ? this.webglLayer.contextLost : false,
         },
         nearest: {
@@ -970,6 +1888,8 @@
     if (!root || root.dataset.rrRuntime === "ready") return;
     root.dataset.rrRuntime = "initializing";
     root.classList.add("rr-js");
+    const scrollVisualAssetsReady = prepareScrollVisualAssets(root);
+    const scheduler = new FrameScheduler(root);
 
     const session = loadSession();
     const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -977,7 +1897,6 @@
     const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
     const canvas = root.querySelector("#rr-field");
     const sections = Array.from(root.querySelectorAll("[data-rr-section]"));
-    const fragments = Array.from(root.querySelectorAll("[data-rr-fragment]"));
     const depthLayers = Array.from(root.querySelectorAll("[data-rr-depth]"));
     const motionControls = Array.from(root.querySelectorAll("[data-rr-motion]"));
     const soundControls = Array.from(root.querySelectorAll("[data-rr-sound]"));
@@ -997,11 +1916,16 @@
     let lastStoredAt = 0;
     let lastExplorationRecord = 0;
     let activeSection = "";
-    let scrollScheduled = false;
+    let activeSectionElement = null;
     let field = null;
+    let fidelity = null;
+    let assembly = null;
+    let collisionEvidence = null;
     let audioContext = null;
     let focusReturnTarget = null;
     let tiltListening = false;
+    let lastScrollY = window.scrollY;
+    let lastScrollAt = performance.now();
 
     const pointer = {
       x: window.innerWidth * 0.5,
@@ -1016,26 +1940,6 @@
     };
 
     const tilt = { x: 0, y: 0, targetX: 0, targetY: 0 };
-    const fragmentStates = fragments.map((element, index) => {
-      const elementRandom = createRandom(FIXED_SEED ^ hashString(`${element.dataset.rrFragment || "fragment"}:${index}`));
-      const kind = (element.dataset.rrFragment || "translation").toLowerCase();
-      return {
-        element,
-        kind,
-        x: 0,
-        y: 0,
-        angle: 0,
-        depth: 0,
-        velocityX: 0,
-        velocityY: 0,
-        angularVelocity: 0,
-        scatterX: (elementRandom() - 0.5) * 2,
-        scatterY: (elementRandom() - 0.5) * 2,
-        scatterAngle: (elementRandom() - 0.5) * 2,
-        phase: elementRandom() * TAU,
-        frequency: 0.00015 + elementRandom() * 0.0002,
-      };
-    });
 
     const sharedState = {
       pointer,
@@ -1046,7 +1950,9 @@
       mimicTempo: 1,
       motionActive: false,
       stableMode,
-      updateFragments: () => {},
+      heroVisible: true,
+      readerOpen: false,
+      scrollVelocity: 0,
       updateNearestCursor: () => {},
     };
 
@@ -1058,6 +1964,8 @@
       session.motionOverride = motionOverride;
       safeSessionStorage.write(session);
     };
+
+    fidelity = new FidelityController(root, scheduler, session, persistSession);
 
     const updateEvolution = () => {
       const count = session.interactionCount;
@@ -1082,7 +1990,7 @@
 
     const updateMotionState = () => {
       sharedState.stableMode = stableMode;
-      sharedState.motionActive = motionEnabled && !stableMode && !document.hidden;
+      sharedState.motionActive = motionEnabled && !reducedMotionQuery.matches && !stableMode && !document.hidden;
       root.dataset.rrMotion = sharedState.motionActive ? "full" : "reduced";
       root.dataset.motion = motionEnabled ? "on" : "off";
       root.dataset.rrStable = stableMode ? "true" : "false";
@@ -1094,6 +2002,7 @@
         if (output) output.textContent = motionEnabled ? "ON" : "OFF";
       });
       if (field) field.invalidate();
+      scheduler.wake("assemblyDirty");
     };
 
     const updateSoundState = () => {
@@ -1133,83 +2042,6 @@
       }
     };
 
-    const chapterDisassembly = (chapter, kind, progress) => {
-      const translationKind = kind.includes("translation") || kind.includes("page") || kind.includes("cover");
-      const researchKind = kind.includes("research") || kind.includes("interface") || kind.includes("screen");
-
-      if (chapter === "collision") return 1;
-      if (chapter === "contact") return 0.06;
-      if (researchKind && chapter === "research") return 1 - ease(progress);
-      if (translationKind && chapter === "translation") return 1 - ease(progress);
-      if (researchKind && chapter === "identity") return 0.7;
-      if (translationKind && chapter === "research") return 0.82;
-      if (researchKind && chapter === "translation") return 0.54;
-      if (chapter === "hero") return researchKind ? 0.82 : 0.94;
-      return 0.5;
-    };
-
-    const updateFragments = (time, delta, immediate = false) => {
-      const chapter = sharedState.chapter;
-      const progress = sharedState.chapterProgress;
-      const motion = sharedState.motionActive;
-      const deltaScale = clamp(delta / 16.7, 0.2, 2.2);
-      const maxHorizontal = clamp(window.innerWidth * 0.12, 34, 148);
-      const maxVertical = clamp(window.innerHeight * 0.09, 32, 92);
-
-      fragmentStates.forEach((fragment, index) => {
-        const translationKind = fragment.kind.includes("translation") || fragment.kind.includes("page") || fragment.kind.includes("cover");
-        const disassembly = chapterDisassembly(chapter, fragment.kind, progress);
-        const overload = chapter === "collision" ? 1.55 : 1;
-        const organicWave = motion
-          ? Math.sin(time * fragment.frequency + fragment.phase)
-          : Math.sin(STABLE_FRAME_TIME * fragment.frequency + fragment.phase);
-        const mechanicalStep = Math.round(organicWave * 2.5) * 2;
-        const targetX =
-          fragment.scatterX * maxHorizontal * disassembly * overload +
-          (translationKind ? organicWave * 3.2 * disassembly : mechanicalStep * disassembly);
-        const targetY =
-          fragment.scatterY * maxVertical * disassembly * overload +
-          (translationKind ? Math.sin(time * fragment.frequency * 0.73 + fragment.phase) * 2.5 * disassembly : 0);
-        const targetAngle = fragment.scatterAngle * (translationKind ? 3.2 : 1.35) * disassembly * overload;
-        const targetDepth = disassembly * (translationKind ? 0.7 : 0.42);
-        const spring = translationKind ? 0.026 : 0.095;
-        const damping = translationKind ? 0.9 : 0.76;
-
-        if (immediate || !motion) {
-          fragment.x = targetX;
-          fragment.y = targetY;
-          fragment.angle = targetAngle;
-          fragment.depth = targetDepth;
-          fragment.velocityX = 0;
-          fragment.velocityY = 0;
-          fragment.angularVelocity = 0;
-        } else {
-          fragment.velocityX = (fragment.velocityX + (targetX - fragment.x) * spring * deltaScale) * Math.pow(damping, deltaScale);
-          fragment.velocityY = (fragment.velocityY + (targetY - fragment.y) * spring * deltaScale) * Math.pow(damping, deltaScale);
-          fragment.angularVelocity =
-            (fragment.angularVelocity + (targetAngle - fragment.angle) * spring * 0.7 * deltaScale) * Math.pow(damping, deltaScale);
-          fragment.x += fragment.velocityX * deltaScale;
-          fragment.y += fragment.velocityY * deltaScale;
-          fragment.angle += fragment.angularVelocity * deltaScale;
-          fragment.depth = lerp(fragment.depth, targetDepth, spring * 2.5 * deltaScale);
-        }
-
-        const releaseOpacity = chapter === "contact" ? (index % 3 === 0 ? 0.16 : 0.3) : 1;
-        fragment.element.style.setProperty("--rr-fragment-x", `${fragment.x.toFixed(2)}px`);
-        fragment.element.style.setProperty("--rr-fragment-y", `${fragment.y.toFixed(2)}px`);
-        fragment.element.style.setProperty("--rr-fragment-angle", `${fragment.angle.toFixed(3)}deg`);
-        fragment.element.style.setProperty("--rr-fragment-depth", fragment.depth.toFixed(3));
-        fragment.element.style.setProperty("--rr-fragment-opacity", releaseOpacity.toFixed(2));
-        fragment.element.classList.toggle("rr-is-assembled", disassembly < 0.12);
-      });
-
-      tilt.x = lerp(tilt.x, tilt.targetX, motion ? 0.045 * deltaScale : 1);
-      tilt.y = lerp(tilt.y, tilt.targetY, motion ? 0.045 * deltaScale : 1);
-      root.style.setProperty("--rr-tilt-x", tilt.x.toFixed(3));
-      root.style.setProperty("--rr-tilt-y", tilt.y.toFixed(3));
-    };
-    sharedState.updateFragments = updateFragments;
-
     const updateCalligraphy = () => {
       if (!calligraphyCharacters.length) return;
       const factors = {
@@ -1243,8 +2075,10 @@
       depthLayers.forEach((layer, index) => {
         const depth = clamp(Number(layer.dataset.rrDepth) || (index % 5) + 1, 0, 8);
         const scale = sharedState.motionActive ? depth * 1.3 : 0;
-        layer.style.setProperty("--rr-depth-x", `${(pointerX * scale).toFixed(2)}px`);
-        layer.style.setProperty("--rr-depth-y", `${(pointerY * scale).toFixed(2)}px`);
+        const nextX = `${(pointerX * scale).toFixed(2)}px`;
+        const nextY = `${(pointerY * scale).toFixed(2)}px`;
+        if (layer.style.getPropertyValue("--rr-depth-x") !== nextX) layer.style.setProperty("--rr-depth-x", nextX);
+        if (layer.style.getPropertyValue("--rr-depth-y") !== nextY) layer.style.setProperty("--rr-depth-y", nextY);
       });
     };
 
@@ -1260,15 +2094,14 @@
     };
 
     const updateScrollState = () => {
-      scrollScheduled = false;
       if (!sections.length) return;
       if (field) field.updateOffset();
       const viewportHeight = Math.max(1, window.innerHeight);
       const center = viewportHeight * 0.48;
       let closest = null;
 
-      sections.forEach((section) => {
-        const bounds = section.getBoundingClientRect();
+      const readings = sections.map((section) => ({ section, bounds: section.getBoundingClientRect() }));
+      readings.forEach(({ section, bounds }) => {
         const distance = Math.abs((bounds.top + bounds.bottom) * 0.5 - center);
         const visible = bounds.bottom > 0 && bounds.top < viewportHeight;
         section.classList.toggle("rr-is-visible", visible);
@@ -1278,26 +2111,17 @@
       if (!closest) return;
       const chapter = normalizeChapter(closest.section);
       const progress = clamp((center - closest.bounds.top) / Math.max(1, closest.bounds.height), 0, 1);
-      const pageScrollable = Math.max(1, document.documentElement.scrollHeight - viewportHeight);
-      const pageProgress = clamp(window.scrollY / pageScrollable, 0, 1);
       sharedState.chapter = chapter;
       sharedState.chapterProgress = progress;
-      root.dataset.rrChapter = chapter;
-      root.dataset.phase = chapter === "contact" ? "release" : chapter;
-      root.style.setProperty("--rr-chapter-progress", progress.toFixed(4));
-      root.style.setProperty("--rr-scroll-progress", pageProgress.toFixed(4));
-      root.classList.toggle("is-fragmented", chapter === "collision");
-
-      const interfaceAssembly = root.querySelector(".rr-interface");
-      const bookAssemblies = Array.from(root.querySelectorAll(".rr-book"));
-      const collisionField = root.querySelector("[data-rr-collision]");
-      if (interfaceAssembly) interfaceAssembly.classList.toggle("is-fragmented", chapter === "collision");
-      bookAssemblies.forEach((book) => book.classList.toggle("is-fragmented", chapter === "collision"));
-      if (collisionField) {
-        collisionField.classList.toggle("is-overloaded", chapter === "collision" && progress > 0.18 && progress < 0.82);
+      if (chapter !== activeSection) {
+        root.dataset.rrChapter = chapter;
+        root.dataset.phase = chapter === "contact" ? "release" : chapter;
+        root.classList.toggle("is-fragmented", chapter === "collision");
       }
-
-      sections.forEach((section) => section.classList.toggle("rr-is-active", section === closest.section));
+      if (closest.section !== activeSectionElement) {
+        sections.forEach((section) => section.classList.toggle("rr-is-active", section === closest.section));
+        activeSectionElement = closest.section;
+      }
 
       if (chapter !== activeSection) {
         activeSection = chapter;
@@ -1311,15 +2135,31 @@
 
       updateCalligraphy();
       updateDepthLayers();
-      updateFragments(stableMode ? STABLE_FRAME_TIME : performance.now(), 16.7, stableMode || !sharedState.motionActive);
-      if (field && !sharedState.motionActive) field.freeze(STABLE_FRAME_TIME);
     };
 
     const requestScrollUpdate = () => {
-      if (scrollScheduled) return;
-      scrollScheduled = true;
-      window.requestAnimationFrame(updateScrollState);
+      const now = performance.now();
+      // A flick that starts after an idle pause is still fast. Capping the
+      // event window prevents that idle time from diluting the first large
+      // displacement, while small wheel/touch deltas remain below threshold.
+      const timeSinceLastScroll = now - lastScrollAt;
+      const elapsed = clamp(timeSinceLastScroll, 8, 48);
+      const nextScrollY = window.scrollY;
+      const instantaneousVelocity = ((nextScrollY - lastScrollY) / elapsed) * 16.7;
+      const directionChanged =
+        Math.abs(sharedState.scrollVelocity) > 0.5 &&
+        Math.abs(instantaneousVelocity) > 0.5 &&
+        Math.sign(sharedState.scrollVelocity) !== Math.sign(instantaneousVelocity);
+      sharedState.scrollVelocity =
+        timeSinceLastScroll > 80 || directionChanged ? instantaneousVelocity : lerp(sharedState.scrollVelocity, instantaneousVelocity, 0.32);
+      lastScrollY = nextScrollY;
+      lastScrollAt = now;
+      scheduler.wake("viewportDirty");
     };
+    scheduler.register("viewport", (_time, _delta, dirty) => {
+      if (dirty.has("viewportDirty") || dirty.has("resizeDirty")) updateScrollState();
+      return false;
+    });
 
     const createCursor = () => {
       if (!finePointerQuery.matches) return null;
@@ -1373,8 +2213,6 @@
       if (!cursor) return;
       cursor.style.setProperty("--rr-cursor-x", `${clientX.toFixed(1)}px`);
       cursor.style.setProperty("--rr-cursor-y", `${clientY.toFixed(1)}px`);
-      cursor.style.left = `${clientX.toFixed(1)}px`;
-      cursor.style.top = `${clientY.toFixed(1)}px`;
       cursor.classList.add("is-visible");
     };
 
@@ -1388,7 +2226,7 @@
       ripple.style.left = `${clientX}px`;
       ripple.style.top = `${clientY}px`;
       root.append(ripple);
-      window.requestAnimationFrame(() => ripple.classList.add("is-active"));
+      window.setTimeout(() => ripple.classList.add("is-active"), 0);
       window.setTimeout(() => ripple.remove(), 720);
     };
 
@@ -1405,24 +2243,31 @@
       pointer.type = event.pointerType || "mouse";
       pointer.lastMoveAt = now;
       lastPointerTarget = event.target;
-      moveCursor(pointer.x, pointer.y);
-      updateDepthLayers();
+      const speed = Math.hypot(pointer.velocityX, pointer.velocityY);
+      if (assembly) assembly.handlePointer(event.target, pointer, speed, now);
+      scheduler.wake("pointerDirty");
 
       if (now - lastExplorationRecord > 850) {
         lastExplorationRecord = now;
         recordInteraction("explore");
       }
-
-      if (field && !sharedState.motionActive) {
-        field.updateNodes(STABLE_FRAME_TIME, 16.7);
-        field.draw(STABLE_FRAME_TIME);
-      }
-      const nearestSample = field ? field.sampleNearestNode(pointer.x, pointer.y) : null;
-      updateCursorMode(event.target, nearestSample);
     };
+    scheduler.register("pointer", (_time, _delta, dirty) => {
+      if (!dirty.has("pointerDirty")) return false;
+      moveCursor(pointer.x, pointer.y);
+      updateDepthLayers();
+      const nearestSample = field && sharedState.heroVisible ? field.sampleNearestNode(pointer.x, pointer.y) : null;
+      updateCursorMode(lastPointerTarget, nearestSample);
+      return false;
+    });
 
     const handlePointerDown = (event) => {
       updatePointer(event);
+      // A tap is a discrete action, so expose its sampled node immediately.
+      // Pointer moves stay frame-coalesced; this one bounded O(node-count)
+      // lookup prevents touch feedback from lagging one scheduler frame.
+      const nearestSample = field ? field.sampleNearestNode(pointer.x, pointer.y) : null;
+      updateCursorMode(event.target, nearestSample);
       recordInteraction("gesture");
       createTouchRipple(event.clientX, event.clientY);
     };
@@ -1430,6 +2275,7 @@
     const handlePointerLeave = (event) => {
       if (event.pointerType === "mouse") pointer.active = false;
       if (field) field.clearNearestSample();
+      if (assembly) assembly.recoverAll();
       if (cursor) {
         cursor.classList.add("rr-cursor--outside");
         cursor.classList.remove("is-visible");
@@ -1473,8 +2319,45 @@
       const dialogSource = pageDialog.querySelector("[data-rr-reader-source]");
       const dialogTitle = pageDialog.querySelector("[data-rr-reader-title]");
       const dialogCount = pageDialog.querySelector("[data-rr-reader-count]");
+      const readerCursor = pageDialog.querySelector("[data-rr-reader-cursor]");
       const closeControls = Array.from(pageDialog.querySelectorAll("[data-rr-reader-close], [data-rr-reader-close-button]"));
       const triggers = Array.from(root.querySelectorAll("[data-rr-open-reader], [data-rr-page-open]"));
+      const readerPointer = {
+        x: window.innerWidth * 0.5,
+        y: window.innerHeight * 0.5,
+        targetX: window.innerWidth * 0.5,
+        targetY: window.innerHeight * 0.5,
+        visible: false,
+        type: "mouse",
+      };
+      if (!readerCursor) pageDialog.classList.add("rr-reader--cursor-fallback");
+
+      scheduler.register("reader-cursor", (_time, delta, dirty) => {
+        if (!sharedState.readerOpen || !readerCursor || !readerPointer.visible) return false;
+        if (!dirty.has("pointerDirty") && !dirty.has("readerDirty")) {
+          const remaining = Math.hypot(readerPointer.targetX - readerPointer.x, readerPointer.targetY - readerPointer.y);
+          if (remaining < 0.2) return false;
+        }
+        const reduced = reducedMotionQuery.matches || !motionEnabled || sharedState.stableMode;
+        const amount = reduced ? 1 : 1 - Math.pow(0.72, clamp(delta / 16.7, 0.25, 2.5));
+        readerPointer.x = lerp(readerPointer.x, readerPointer.targetX, amount);
+        readerPointer.y = lerp(readerPointer.y, readerPointer.targetY, amount);
+        readerCursor.style.setProperty("--rr-reader-cursor-x", `${readerPointer.x.toFixed(1)}px`);
+        readerCursor.style.setProperty("--rr-reader-cursor-y", `${readerPointer.y.toFixed(1)}px`);
+        readerCursor.dataset.rrPointerType = readerPointer.type;
+        readerCursor.classList.add("is-visible");
+        return !reduced && Math.hypot(readerPointer.targetX - readerPointer.x, readerPointer.targetY - readerPointer.y) >= 0.2;
+      });
+
+      const deactivateReader = () => {
+        sharedState.readerOpen = false;
+        root.dataset.rrReaderOpen = "false";
+        readerPointer.visible = false;
+        if (readerCursor) readerCursor.classList.remove("is-visible");
+        document.body.classList.remove("rr-reader-open");
+        if (field) field.invalidate();
+        scheduler.wake("viewportDirty");
+      };
 
       const closeDialog = () => {
         if (typeof pageDialog.close === "function" && pageDialog.open) {
@@ -1482,7 +2365,7 @@
         } else {
           pageDialog.removeAttribute("open");
           pageDialog.setAttribute("aria-hidden", "true");
-          document.body.classList.remove("rr-reader-open");
+          deactivateReader();
           if (focusReturnTarget && typeof focusReturnTarget.focus === "function") focusReturnTarget.focus({ preventScroll: true });
         }
       };
@@ -1495,6 +2378,9 @@
         if (!source || !dialogImage) return;
 
         focusReturnTarget = trigger;
+        const owningBook = trigger.closest("[data-rr-book]");
+        const readerTheme = owningBook && owningBook.dataset.rrBook === "platform-socialism" ? "platform" : "xenofeminism";
+        pageDialog.dataset.rrReaderTheme = readerTheme;
         dialogImage.src = source;
         dialogImage.alt = trigger.dataset.rrPageAlt || title;
         if (dialogSource) {
@@ -1511,6 +2397,9 @@
         }
         pageDialog.setAttribute("aria-hidden", "false");
         document.body.classList.add("rr-reader-open");
+        sharedState.readerOpen = true;
+        root.dataset.rrReaderOpen = "true";
+        if (field) field.stop();
         if (typeof pageDialog.showModal === "function") {
           if (!pageDialog.open) pageDialog.showModal();
         } else {
@@ -1518,8 +2407,21 @@
           pageDialog.setAttribute("role", "dialog");
           pageDialog.setAttribute("aria-modal", "true");
         }
+        if (readerCursor && finePointerQuery.matches && pointer.active && pointer.type !== "touch") {
+          readerPointer.x = pointer.x;
+          readerPointer.y = pointer.y;
+          readerPointer.targetX = pointer.x;
+          readerPointer.targetY = pointer.y;
+          readerPointer.type = pointer.type;
+          readerPointer.visible = true;
+          readerCursor.style.setProperty("--rr-reader-cursor-x", `${readerPointer.x.toFixed(1)}px`);
+          readerCursor.style.setProperty("--rr-reader-cursor-y", `${readerPointer.y.toFixed(1)}px`);
+          readerCursor.dataset.rrPointerType = readerPointer.type;
+          readerCursor.classList.add("is-visible");
+        }
         const initialFocus = closeControls[0] || pageDialog;
-        window.requestAnimationFrame(() => initialFocus.focus({ preventScroll: true }));
+        window.setTimeout(() => initialFocus.focus({ preventScroll: true }), 0);
+        scheduler.wake("readerDirty");
         recordInteraction("reader");
         playFeedback(410);
       };
@@ -1546,14 +2448,46 @@
       pageDialog.addEventListener("click", (event) => {
         if (event.target === pageDialog) closeDialog();
       });
+      pageDialog.addEventListener(
+        "pointermove",
+        (event) => {
+          event.stopPropagation();
+          readerPointer.targetX = event.clientX;
+          readerPointer.targetY = event.clientY;
+          readerPointer.type = event.pointerType || "mouse";
+          readerPointer.visible = true;
+          scheduler.wake("pointerDirty");
+        },
+        { passive: true }
+      );
+      pageDialog.addEventListener(
+        "pointerenter",
+        (event) => {
+          readerPointer.targetX = event.clientX;
+          readerPointer.targetY = event.clientY;
+          readerPointer.type = event.pointerType || "mouse";
+          readerPointer.visible = true;
+          scheduler.wake("readerDirty");
+        },
+        { passive: true }
+      );
+      pageDialog.addEventListener(
+        "pointerleave",
+        () => {
+          readerPointer.visible = false;
+          if (readerCursor) readerCursor.classList.remove("is-visible");
+        },
+        { passive: true }
+      );
       pageDialog.addEventListener("close", () => {
-        document.body.classList.remove("rr-reader-open");
+        deactivateReader();
         pageDialog.setAttribute("aria-hidden", "true");
         if (focusReturnTarget && typeof focusReturnTarget.focus === "function") {
           focusReturnTarget.focus({ preventScroll: true });
         }
       });
       pageDialog.addEventListener("keydown", (event) => {
+        if (event.key === "Tab" && readerCursor) readerCursor.classList.remove("is-visible");
         if (event.key === "Escape" && typeof pageDialog.close !== "function") {
           event.preventDefault();
           closeDialog();
@@ -1589,6 +2523,7 @@
       tilt.targetY = beta;
       root.style.setProperty("--rr-tilt-input-x", gamma.toFixed(3));
       root.style.setProperty("--rr-tilt-input-y", beta.toFixed(3));
+      scheduler.wake("pointerDirty");
     };
 
     const setTiltState = (state) => {
@@ -1680,20 +2615,49 @@
         root.classList.remove("rr-cursor-enabled");
       }
     };
+    scheduler.register("tilt", (_time, delta, dirty) => {
+      if (!dirty.has("pointerDirty") && Math.hypot(tilt.targetX - tilt.x, tilt.targetY - tilt.y) < 0.001) return false;
+      const amount = sharedState.motionActive ? 1 - Math.pow(0.955, clamp(delta / 16.7, 0.2, 2.5)) : 1;
+      tilt.x = lerp(tilt.x, tilt.targetX, amount);
+      tilt.y = lerp(tilt.y, tilt.targetY, amount);
+      return sharedState.motionActive && Math.hypot(tilt.targetX - tilt.x, tilt.targetY - tilt.y) >= 0.001;
+    });
 
     root.dataset.rrWebgl = "pending";
     root.dataset.rrRenderer = "2d-fallback";
     updateEvolution();
     setupControls();
-    setupDialog();
     setupTilt();
     updateSoundState();
 
     if (canvas) {
-      field = new RhizomeField(canvas, root, sharedState);
+      field = new RhizomeField(canvas, root, sharedState, scheduler, fidelity);
       if (!field.available) field = null;
     } else {
       root.dataset.rrRenderer = "no-canvas";
+    }
+    assembly = new AssemblyController(root, scheduler, sharedState, fidelity);
+    collisionEvidence = new CollisionEvidenceController(root, scheduler, sharedState, fidelity);
+    setupDialog();
+
+    const hero = root.querySelector("#hero, .rr-hero");
+    if (hero && typeof window.IntersectionObserver === "function") {
+      const heroObserver = new window.IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          sharedState.heroVisible = Boolean(entry && (entry.isIntersecting || entry.intersectionRatio > 0));
+          root.dataset.rrFieldVisible = sharedState.heroVisible ? "true" : "false";
+          if (field) {
+            if (sharedState.heroVisible) field.invalidate();
+            else field.stop();
+          }
+          scheduler.wake("viewportDirty");
+        },
+        { threshold: [0, 0.001] }
+      );
+      heroObserver.observe(hero);
+    } else {
+      root.dataset.rrFieldVisible = "true";
     }
 
     root.addEventListener("pointermove", updatePointer, { passive: true });
@@ -1702,6 +2666,15 @@
     root.addEventListener("pointerenter", handlePointerEnter, { passive: true });
     window.addEventListener("scroll", requestScrollUpdate, { passive: true });
     window.addEventListener("resize", requestScrollUpdate, { passive: true });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        scheduler.stop();
+      } else {
+        scheduler.refreshSamples.length = 0;
+        scheduler.refreshMeasured = false;
+        scheduler.wake("resizeDirty");
+      }
+    });
 
     if (typeof reducedMotionQuery.addEventListener === "function") {
       reducedMotionQuery.addEventListener("change", handleReducedMotionChange);
@@ -1718,6 +2691,7 @@
       updateMotionState();
       updateScrollState();
       if (field) field.freeze(Number.isFinite(time) ? time : STABLE_FRAME_TIME);
+      scheduler.wake("assemblyDirty");
     };
 
     const unfreeze = () => {
@@ -1745,6 +2719,11 @@
       renderAt(time = STABLE_FRAME_TIME) {
         if (!field) return;
         field.freeze(Number.isFinite(time) ? time : STABLE_FRAME_TIME);
+      },
+      resetPerformanceWindow() {
+        scheduler.resetPerformanceWindow();
+        if (field) field.resetPerformanceWindow();
+        scheduler.wake("viewportDirty");
       },
       snapshot() {
         const metrics = field
@@ -1783,9 +2762,24 @@
           motion: root.dataset.rrMotion,
           renderer: root.dataset.rrRenderer,
           stable: root.dataset.rrStable,
+          scrollVelocity: Number(sharedState.scrollVelocity.toFixed(3)),
           frame: metrics.frame,
           sample: metrics.sample,
           nearest: metrics.nearest,
+          scheduler: scheduler.snapshot(),
+          fidelity: {
+            mode: fidelity.mode,
+            level: fidelity.level,
+            ...fidelity.profile(),
+          },
+          assembly: assembly ? assembly.snapshot() : [],
+          collision: collisionEvidence ? collisionEvidence.snapshot() : null,
+          reader: {
+            open: sharedState.readerOpen,
+            theme: pageDialog ? pageDialog.dataset.rrReaderTheme || "" : "",
+            cursorInDialog: Boolean(pageDialog && pageDialog.querySelector("[data-rr-reader-cursor]")),
+            cursorVisible: Boolean(pageDialog && pageDialog.querySelector("[data-rr-reader-cursor].is-visible")),
+          },
           tilt: {
             enabled: tiltListening,
             x: Number(tilt.x.toFixed(3)),
@@ -1801,11 +2795,14 @@
     observeVisualStabilizer();
     updateMotionState();
     updateScrollState();
-    root.classList.add("rr-ready");
-    root.classList.toggle("rr-cursor-enabled", finePointerQuery.matches);
-    root.dataset.rrRuntime = "ready";
-    window.__RENAISSANCE_RHIZOME_READY__ = true;
-    window.dispatchEvent(new CustomEvent("rr:ready"));
+    scheduler.wake("viewportDirty");
+    scrollVisualAssetsReady.finally(() => {
+      root.classList.add("rr-ready");
+      root.classList.toggle("rr-cursor-enabled", finePointerQuery.matches);
+      root.dataset.rrRuntime = "ready";
+      window.__RENAISSANCE_RHIZOME_READY__ = true;
+      window.dispatchEvent(new CustomEvent("rr:ready"));
+    });
   };
 
   if (document.readyState === "loading") {

@@ -5,6 +5,7 @@ description: Xenofeminism and Platform Socialism translation projects
 img: assets/img/translation-xenofeminism-wide.png
 importance: 2
 category: translation
+project_id: translation-projects
 ---
 
 Translation Projects 收录我已完成的两个译著项目：《陌异女性主义》和《平台社会主义》。
@@ -22,4 +23,9 @@ Translation Projects 收录我已完成的两个译著项目：《陌异女性�
   </figure>
 </div>
 
-在首页的 Translation Archive 中，封面与正文页会在完整阅读态和碎片化空间态之间切换；这里则保留两项译著的稳定档案入口。
+两项翻译都把术语决定视为可以追踪和修订的判断：译名需要在原文语境、中文概念史与现实政治含义之间持续校准。
+
+<nav class="project-note-index" aria-label="相关札记">
+  <span>RELATED NOTE / 02</span>
+  <a href="{{ '/blog/2026/words-have-no-homeland/' | relative_url }}">《词语没有故乡》 ↗</a>
+</nav>

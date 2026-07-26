@@ -10,11 +10,15 @@ on:
       - "**.bib"
       - "**.html"
       - "**.js"
+      - "**.json"
+      - "**.mjs"
       - "**.liquid"
       - "**/*.md"
       - "**.yml"
       - "Gemfile"
       - "Gemfile.lock"
+      - "package.json"
+      - "package-lock.json"
       - "!.github/workflows/axe.yml"
       - "!.github/workflows/broken-links.yml"
       - "!.github/workflows/deploy-docker-tag.yml"
@@ -37,11 +41,15 @@ on:
       - "**.bib"
       - "**.html"
       - "**.js"
+      - "**.json"
+      - "**.mjs"
       - "**.liquid"
       - "**/*.md"
       - "**.yml"
       - "Gemfile"
       - "Gemfile.lock"
+      - "package.json"
+      - "package-lock.json"
       - "!.github/workflows/axe.yml"
       - "!.github/workflows/broken-links.yml"
       - "!.github/workflows/deploy-docker-tag.yml"
@@ -84,6 +92,8 @@ jobs:
           cache: "npm"
       - name: Install JS deps 📦
         run: npm ci
+      - name: Verify site content and generated data 🔎
+        run: npm run verify:assignment
       - name: Update _config.yml ⚙️
         uses: fjogeleit/yaml-update-action@main
         with:
