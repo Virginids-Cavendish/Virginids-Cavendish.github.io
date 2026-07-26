@@ -95,6 +95,7 @@ Intel Iris Xe 硬件 renderer 的补充 cadence 样本取得 64 个有效样本�
 | ---------------------------------------- | ------------------------------------------------------------------- |
 | `npm.cmd run verify:assignment`          | 通过                                                                |
 | `npm.cmd run verify:notes-graph`         | 通过；14 nodes / 13 edges / `ccdbe183666c`                          |
+| Windows fresh-checkout 图谱校验          | 通过；源文件哈希统一 LF／CRLF 后结果一致                            |
 | `npm.cmd run lint:style-contract`        | 通过                                                                |
 | 12 个任务 JS / MJS / Playwright 文件语法 | `node --check` 全部通过                                             |
 | `git diff --check`                       | 通过；仅 Git 的 LF → CRLF 工作树提示                                |
@@ -102,7 +103,7 @@ Intel Iris Xe 硬件 renderer 的补充 cadence 样本取得 64 个有效样本�
 | 全仓 `npm.cmd run lint:prettier`         | 未通过；仅命中 37 个未改动的 starter 历史文件                       |
 | 本地 QA Jekyll build                     | 通过；使用 `_config.yml,test/visual/jekyll.test.yml` 与 `/al-folio` |
 | Windows production-config build          | 退出码 0；生成 129 个响应式图片变体                                 |
-| GitHub Actions production build          | 合并后由 Pages 工作流验证                                           |
+| GitHub Actions production build          | 通过；Deploy site run `30189204125` 全步骤 success                  |
 
 全仓 Prettier 的 37 个命中项包括 `_data/socials.yml`、`_pages/404.md`、`_pages/cv.md`、`_pages/projects.md`
 以及 starter 自带的 agent、instruction、devcontainer、RenderCV、compose 和旧测试辅助文件；它们均不在本轮
@@ -118,10 +119,23 @@ Windows production-config build 完成页面与 129 个图片变体后，`jekyll
 - `screenshots/refinement-reader-cursor.png`：书页 reader 与无文字、亮度渐变光晕 cursor 同处 top layer。
 - `screenshots/refinement-notes-atlas.png`：Notes 固定拓扑根茎图及分类／标签入口。
 
-三张截图均由本地 QA 构建生成；公开 Pages 的最终状态在合并和部署后复核。
+三张截图均由本地 QA 构建生成；公开 Pages 已在合并和部署后复核。
 
-## 6. 当前结论
+## 6. 公开部署
+
+- PR [#2](https://github.com/Virginids-Cavendish/Virginids-Cavendish.github.io/pull/2) 已 squash 合并到
+  `main`，功能提交为 `6f3e0f943268141ccc91fd6666da87bc4b1600d3`。
+- [Deploy site run 30189204125](https://github.com/Virginids-Cavendish/Virginids-Cavendish.github.io/actions/runs/30189204125)
+  的内容校验、Jekyll build、CSS 清理和 Deploy 步骤全部成功。
+- 首页、Blog、两篇札记、语义图谱 JSON、书页缩略图和封面 fragment 共 7 个缓存绕过探针均返回 HTTP 200，
+  页面标题与图谱哈希标记正确。
+- 线上 `renaissance-rhizome.js` 与本地 production 产物仅有 LF／CRLF 差异；统一换行后的 SHA-256 均为
+  `4860011df761c87efd924e93ca773310db104db969af0ca76ae428b807cdfee1`。
+- 公开站点真实浏览器快照中，首页 runtime 为 `ready`，包含 6 个章节、8 张书页和 2 本书封；Notes runtime
+  为 `ready`，包含 14 个图节点与 2 篇文字索引；未捕获 `pageerror` 或 console error。
+
+## 7. 当前结论
 
 本轮功能回归、严格软件性能门禁、静态图谱、站点边界和本地 Jekyll 构建均已完成且无失败。明确保留的边界有
 三项：67 个适用性 skip 不等于 67 个通过；未配置外部视觉基线；Intel Iris Xe 的补充热区运行没有通过严格
-Long Task 次数门槛。公开发布结论必须以合并后的 GitHub Pages 工作流和线上页面复核为准。
+Long Task 次数门槛。GitHub Pages 的构建、部署、关键资源探针与线上运行时复核均已通过。

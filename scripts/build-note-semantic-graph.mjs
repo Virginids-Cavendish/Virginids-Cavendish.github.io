@@ -39,6 +39,10 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+export function normalizedSourceHash(value) {
+  return sha256(String(value).replace(/\r\n?/g, "\n"));
+}
+
 function unquote(value) {
   const trimmed = value.trim();
   if (trimmed.length >= 2 && ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'")))) {
@@ -511,7 +515,7 @@ async function buildGraph() {
       body: plainBody,
       excerpt: extractExcerpt(body),
     };
-    note.contentHash = sha256(source);
+    note.contentHash = normalizedSourceHash(source);
     notes.push(note);
   }
 
@@ -537,7 +541,7 @@ async function buildGraph() {
       title: data.title || projectId,
       url: `/projects/${fallbackId}/`,
       category: data.category || "",
-      contentHash: sha256(projectSource),
+      contentHash: normalizedSourceHash(projectSource),
     });
   }
   for (const note of notes) {
@@ -790,7 +794,7 @@ function currentSourceState() {
       concepts: [...new Set(data.concepts)].sort(),
       body: cleanSemanticBody(body),
     };
-    note.contentHash = sha256(source);
+    note.contentHash = normalizedSourceHash(source);
     notes.push(note);
   }
 
@@ -806,7 +810,7 @@ function currentSourceState() {
     const source = readFileSync(filePath, "utf8");
     const { data } = parseFrontMatter(source, filePath);
     const projectId = data.project_id || fileName.replace(/\.md$/, "");
-    projects.set(projectId, { projectId, fileName, contentHash: sha256(source) });
+    projects.set(projectId, { projectId, fileName, contentHash: normalizedSourceHash(source) });
   }
 
   for (const note of notes) {

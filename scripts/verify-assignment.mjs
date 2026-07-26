@@ -75,6 +75,10 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function normalizedSourceHash(value) {
+  return sha256(String(value).replace(/\r\n?/g, "\n"));
+}
+
 function parseFrontMatter(relativePath) {
   const source = readIfExists(relativePath).replace(/\r/g, "");
   const match = source.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
@@ -303,7 +307,7 @@ if (fs.existsSync(graphPath)) {
       if (!fs.existsSync(sourcePath)) {
         failures.push(`Semantic graph source is missing: ${source.file}`);
       } else {
-        const actualHash = sha256(fs.readFileSync(sourcePath));
+        const actualHash = normalizedSourceHash(fs.readFileSync(sourcePath, "utf8"));
         if (actualHash !== source.contentHash) failures.push(`Semantic graph is stale for ${source.file}`);
       }
     }
