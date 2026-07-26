@@ -92,7 +92,7 @@ async function evidenceGeometry(page, index) {
     .locator("[data-rr-evidence]")
     .nth(index)
     .evaluate((item) => {
-      const image = item.querySelector("img");
+      const image = item.querySelector(".rr-collision__station-frame");
       const viewport = item.closest(".rr-collision__evidence-viewport");
       const track = item.closest("[data-rr-evidence-track]");
       const itemBounds = item.getBoundingClientRect();
@@ -871,7 +871,7 @@ test("each book assembles independently, latches its terminal geometry, and reco
   await expect(books.nth(0)).toHaveAttribute("data-rr-assembly", "settled");
 });
 
-test("research assembles, collision evidence stays legible, and the field releases into negative space", async ({ page }, testInfo) => {
+test("research assembles, collision methodology stays legible, and the field releases into negative space", async ({ page }, testInfo) => {
   await page.setViewportSize(testInfo.project.name === "mobile" ? { width: 390, height: 844 } : { width: 1440, height: 1100 });
   await openInstrument(page);
   const root = page.locator("[data-rr-root]");
@@ -883,12 +883,10 @@ test("research assembles, collision evidence stays legible, and the field releas
   await expect.poll(() => master.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator(".rr-interface__fragments")).toHaveCSS("opacity", "0");
 
-  const collisionImages = page.locator(".rr-collision__evidence-item img");
-  await expect(collisionImages).toHaveCount(4);
-  for (const collisionImage of await collisionImages.all()) {
-    await collisionImage.scrollIntoViewIfNeeded();
-    await expect.poll(() => collisionImage.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
-  }
+  const collisionStations = page.locator(".rr-collision__station");
+  await expect(collisionStations).toHaveCount(4);
+  await expect(collisionStations.locator("h3")).toHaveText(["先记录，不归类", "让竞争解释同时显形", "改关系，不只改答案", "让修正返回现场"]);
+  await expect(page.locator(".rr-collision__station img")).toHaveCount(0);
   await page.locator("#collision-field").evaluate((section) => section.scrollIntoView({ block: "center" }));
   await expect(root).toHaveAttribute("data-rr-chapter", "collision");
   if (testInfo.project.name === "mobile") {
@@ -896,11 +894,11 @@ test("research assembles, collision evidence stays legible, and the field releas
   } else {
     await moveCollisionTo(page, 0);
   }
-  const collisionMaterial = await collisionImages.evaluateAll((images) =>
-    images.map((image) => ({
-      opacity: Number.parseFloat(getComputedStyle(image).opacity),
-      width: image.getBoundingClientRect().width,
-      height: image.getBoundingClientRect().height,
+  const collisionMaterial = await collisionStations.locator(".rr-collision__station-frame").evaluateAll((frames) =>
+    frames.map((frame) => ({
+      opacity: Number.parseFloat(getComputedStyle(frame).opacity),
+      width: frame.getBoundingClientRect().width,
+      height: frame.getBoundingClientRect().height,
     }))
   );
   expect(collisionMaterial.every(({ width, height }) => width > 0 && height > 0)).toBeTruthy();
@@ -1027,7 +1025,7 @@ test("desktop collision evidence follows a reversible cross-fading horizontal ch
       return items
         .map((item, index) => {
           const bounds = item.getBoundingClientRect();
-          const image = item.querySelector("img");
+          const image = item.querySelector(".rr-collision__station-frame");
           const horizontalIntersection = Math.max(0, Math.min(bounds.right, viewportBounds.right) - Math.max(bounds.left, viewportBounds.left));
           return {
             index,
@@ -1375,9 +1373,9 @@ test("mobile keeps the full instrument and avoids horizontal overflow", async ({
   });
   expect(evidenceGeometry.maximum).toBeGreaterThan(100);
   expect(evidenceGeometry.documentOverflow).toBeLessThanOrEqual(1);
-  expect(evidenceGeometry.itemAspect).toBeGreaterThanOrEqual(0.75);
-  expect(evidenceGeometry.itemAspect).toBeLessThanOrEqual(0.85);
-  expect(evidenceGeometry.viewportRatio).toBeLessThan(0.7);
+  expect(evidenceGeometry.itemAspect).toBeGreaterThanOrEqual(0.55);
+  expect(evidenceGeometry.itemAspect).toBeLessThanOrEqual(0.65);
+  expect(evidenceGeometry.viewportRatio).toBeLessThan(0.82);
   await evidenceTrack.evaluate((track) => {
     track.scrollLeft = (track.scrollWidth - track.clientWidth) * 0.72;
     track.dispatchEvent(new Event("scroll"));
@@ -1412,8 +1410,8 @@ test("mobile keeps the full instrument and avoids horizontal overflow", async ({
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
-  expect(landscapeEvidence.aspect).toBeGreaterThanOrEqual(0.75);
-  expect(landscapeEvidence.aspect).toBeLessThanOrEqual(0.85);
+  expect(landscapeEvidence.aspect).toBeGreaterThanOrEqual(1.6);
+  expect(landscapeEvidence.aspect).toBeLessThanOrEqual(2);
   expect(landscapeEvidence.viewportRatio).toBeLessThan(0.9);
   expect(landscapeEvidence.documentOverflow).toBeLessThanOrEqual(1);
 });
