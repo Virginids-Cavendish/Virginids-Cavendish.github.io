@@ -797,98 +797,237 @@ description: 阎光锋 / Virginids 的个人学术作品集首页。
     <header class="rr-section__header">
       <p class="rr-instrument-label">PLATE 04 / Collision Field / Old Gold</p>
       <h2 id="rr-collision-title">FIELD / COLLISION</h2>
+      <p class="rr-collision__lede">
+        研究把误差视作反馈，翻译把歧义放回语境。两条工作线在同一方法场中交叉：
+        偏差不被删除，而被送回结构，改写下一轮路径。
+      </p>
+
+      <dl class="rr-collision__key" aria-label="Field and collision definitions">
+        <div>
+          <dt>FIELD</dt>
+          <dd>项目之间共享的工作方法</dd>
+        </div>
+        <div>
+          <dt>COLLISION</dt>
+          <dd>异质证据迫使暂时判断改写的瞬间</dd>
+        </div>
+      </dl>
     </header>
 
-    <div class="rr-collision__traces">
-      <ol class="rr-collision__trace rr-collision__trace--research" aria-label="Research trace">
-        <li>采样</li>
-        <li>误差</li>
-        <li>反馈</li>
-        <li>再规划</li>
-      </ol>
-      <ol class="rr-collision__trace rr-collision__trace--translation" aria-label="Translation trace">
-        <li>术语</li>
-        <li>语境</li>
-        <li>覆写</li>
-        <li>再校准</li>
-      </ol>
+    <div class="rr-collision__traces" aria-label="Two parallel method traces">
+      <div class="rr-collision__trace-group">
+        <p>RESEARCH / CYAN</p>
+        <ol class="rr-collision__trace rr-collision__trace--research" aria-label="Research trace">
+          <li><span>01 / SAMPLE</span>观察</li>
+          <li><span>02 / ERROR</span>竞争解释</li>
+          <li><span>03 / FEEDBACK</span>可撤回介入</li>
+          <li><span>04 / REPLAN</span>延迟验证</li>
+        </ol>
+      </div>
+      <div class="rr-collision__trace-group">
+        <p>TRANSLATION / CINNABAR</p>
+        <ol class="rr-collision__trace rr-collision__trace--translation" aria-label="Translation trace">
+          <li><span>01 / TERM</span>语境</li>
+          <li><span>02 / CONTEXT</span>候选取舍</li>
+          <li><span>03 / OVERWRITE</span>带理由修订</li>
+          <li><span>04 / RECALIBRATE</span>新语境复查</li>
+        </ol>
+      </div>
     </div>
 
     <div class="rr-collision__evidence-stage" data-rr-collision-evidence>
       <div class="rr-collision__evidence-viewport">
-        <div class="rr-collision__evidence" data-rr-evidence-track aria-label="Visual evidence">
-          <picture
-            class="rr-picture rr-collision__evidence-item"
+        <div class="rr-collision__evidence" data-rr-evidence-track aria-label="四阶段方法转换剖面">
+          <article
+            class="rr-collision__evidence-item rr-collision__station rr-collision__station--register"
             data-rr-evidence
             data-rr-evidence-state="queued"
-            role="img"
-            aria-label="Rhizome-Learn 学习界面证据"
+            aria-labelledby="rr-collision-register-title"
           >
-            <source
-              type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/rhizome-interface.webp' | relative_url }}"
-            >
-            <img
-              src="{{ '/assets/img/renaissance-rhizome/rhizome-interface.png' | relative_url }}"
-              alt="Rhizome-Learn 学习界面"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <picture
-            class="rr-picture rr-collision__evidence-item"
+            <div class="rr-collision__station-frame">
+              <header class="rr-collision__station-header">
+                <p>04.1 / SAMPLE × TERM</p>
+                <h3 id="rr-collision-register-title">先记录，不归类</h3>
+              </header>
+
+              <div class="rr-method rr-method--register" aria-label="Observation and term records">
+                <section class="rr-method__line rr-method__line--research">
+                  <header><span>RESEARCH</span><strong>可见行为</strong></header>
+                  <ul>
+                    <li>作答</li>
+                    <li>用时</li>
+                    <li>提示</li>
+                    <li>自信</li>
+                  </ul>
+                </section>
+
+                <div class="rr-method__contact" aria-hidden="true">
+                  <span>×</span>
+                  <i></i>
+                </div>
+
+                <section class="rr-method__line rr-method__line--translation">
+                  <header><span>TRANSLATION</span><strong>术语记录</strong></header>
+                  <ul>
+                    <li>原词</li>
+                    <li>候选</li>
+                    <li>所在句</li>
+                    <li>邻接概念</li>
+                  </ul>
+                </section>
+              </div>
+
+              <p class="rr-collision__station-thesis">
+                可见行为只是痕迹，词语也不携带唯一译名。样本先被保留，不被提前写成能力标签或词典答案。
+              </p>
+
+              <footer class="rr-collision__station-output">
+                <span>METHOD OUTPUT</span>
+                <strong>可追溯的差异</strong>
+              </footer>
+            </div>
+          </article>
+
+          <article
+            class="rr-collision__evidence-item rr-collision__station rr-collision__station--compare"
             data-rr-evidence
             data-rr-evidence-state="queued"
-            role="img"
-            aria-label="《陌异女性主义》反馈正文页证据"
+            aria-labelledby="rr-collision-compare-title"
           >
-            <source
-              type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.webp' | relative_url }}"
-            >
-            <img
-              src="{{ '/assets/img/renaissance-rhizome/pages/xf-feedback.png' | relative_url }}"
-              alt="《陌异女性主义》反馈正文页"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <picture
-            class="rr-picture rr-collision__evidence-item"
+            <div class="rr-collision__station-frame">
+              <header class="rr-collision__station-header">
+                <p>04.2 / ERROR × CONTEXT</p>
+                <h3 id="rr-collision-compare-title">让竞争解释同时显形</h3>
+              </header>
+
+              <div class="rr-method rr-method--compare" aria-label="Competing explanations and translation candidates">
+                <section class="rr-method__compare rr-method__compare--research">
+                  <header><span>ERROR / HYPOTHESES</span><strong>概率题错误</strong></header>
+                  <p><b>H₁</b> 独立性条件遗漏</p>
+                  <p><b>H₂</b> 公式过度泛化</p>
+                </section>
+
+                <div class="rr-method__contact rr-method__contact--compare" aria-hidden="true">
+                  <span>≠</span>
+                  <i></i>
+                </div>
+
+                <section class="rr-method__compare rr-method__compare--translation">
+                  <header><span>PUBLIC / CANDIDATES</span><strong>public platform</strong></header>
+                  <p><b>A</b> 公有平台 <small>所有权先行</small></p>
+                  <p><b>B</b> 公共平台 <small>公共目的与治理</small></p>
+                </section>
+              </div>
+
+              <p class="rr-collision__station-thesis">
+                错误不是能力标签，译名也不是词典答案。并置让原有结构解释不了的位置保持可见。
+              </p>
+
+              <footer class="rr-collision__station-output">
+                <span>METHOD OUTPUT</span>
+                <strong>暂时判断，而非终局</strong>
+              </footer>
+            </div>
+          </article>
+
+          <article
+            class="rr-collision__evidence-item rr-collision__station rr-collision__station--rewrite"
             data-rr-evidence
             data-rr-evidence-state="queued"
-            role="img"
-            aria-label="《平台社会主义》公共平台正文页证据"
+            aria-labelledby="rr-collision-rewrite-title"
           >
-            <source
-              type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.webp' | relative_url }}"
-            >
-            <img
-              src="{{ '/assets/img/renaissance-rhizome/pages/ps-public-platform.png' | relative_url }}"
-              alt="《平台社会主义》公共平台正文页"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
-          <picture
-            class="rr-picture rr-collision__evidence-item"
+            <div class="rr-collision__station-frame">
+              <header class="rr-collision__station-header">
+                <p>04.3 / FEEDBACK × OVERWRITE</p>
+                <h3 id="rr-collision-rewrite-title">改关系，不只改答案</h3>
+              </header>
+
+              <div class="rr-method rr-method--rewrite" aria-label="Reversible research and translation interventions">
+                <section class="rr-method__route rr-method__route--research">
+                  <header><span>RESEARCH</span><strong>最小辨别任务</strong></header>
+                  <ol>
+                    <li><i>01</i>反例</li>
+                    <li><i>02</i>解释</li>
+                    <li><i>03</i>调整概念边</li>
+                    <li><i>04</i>延后复习</li>
+                  </ol>
+                </section>
+
+                <div class="rr-method__contact rr-method__contact--rewrite" aria-hidden="true">
+                  <span>↯</span>
+                  <i></i>
+                </div>
+
+                <section class="rr-method__route rr-method__route--translation">
+                  <header><span>TRANSLATION</span><strong>版本记录</strong></header>
+                  <ol>
+                    <li><i>01</i>语境</li>
+                    <li><i>02</i>候选方案</li>
+                    <li><i>03</i>放弃方案</li>
+                    <li><i>04</i>修改理由</li>
+                  </ol>
+                </section>
+              </div>
+
+              <p class="rr-collision__station-thesis">
+                研究侧调整节点关系与下一入口；翻译侧调整概念映射与句法重心。修正发生在结构层，并且可以撤回。
+              </p>
+
+              <footer class="rr-collision__station-output">
+                <span>METHOD OUTPUT</span>
+                <strong>带理由的结构改写</strong>
+              </footer>
+            </div>
+          </article>
+
+          <article
+            class="rr-collision__evidence-item rr-collision__station rr-collision__station--return"
             data-rr-evidence
             data-rr-evidence-state="queued"
-            role="img"
-            aria-label="《平台社会主义》英文封面证据"
+            aria-labelledby="rr-collision-return-title"
           >
-            <source
-              type="image/webp"
-              srcset="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.webp' | relative_url }}"
-            >
-            <img
-              src="{{ '/assets/img/renaissance-rhizome/pages/ps-cover.png' | relative_url }}"
-              alt="《平台社会主义》英文封面"
-              loading="lazy"
-              decoding="async"
-            >
-          </picture>
+            <div class="rr-collision__station-frame">
+              <header class="rr-collision__station-header">
+                <p>04.4 / REPLAN × RECALIBRATE</p>
+                <h3 id="rr-collision-return-title">让修正返回现场</h3>
+              </header>
+
+              <div class="rr-method rr-method--return" aria-label="Validation and recalibration loop">
+                <section class="rr-method__checks rr-method__checks--research">
+                  <header><span>DELAYED VALIDATION</span><strong>路径复查</strong></header>
+                  <ul>
+                    <li>延迟回忆</li>
+                    <li>换表面</li>
+                    <li>不足以判断</li>
+                  </ul>
+                </section>
+
+                <div class="rr-method__return-core" aria-hidden="true">
+                  <span>DETERRITORIALIZE</span>
+                  <b>↺</b>
+                  <span>RETERRITORIALIZE</span>
+                </div>
+
+                <section class="rr-method__checks rr-method__checks--translation">
+                  <header><span>NEW CONTEXT</span><strong>译名复查</strong></header>
+                  <ul>
+                    <li>新语境</li>
+                    <li>可修订</li>
+                    <li>暂时地址</li>
+                  </ul>
+                </section>
+              </div>
+
+              <p class="rr-collision__station-thesis">
+                延迟迁移与新语境复查前一轮判断；证据不足时保留“不足以判断”。结果重新成为下一轮观察。
+              </p>
+
+              <footer class="rr-collision__station-output">
+                <span>RETURN / 04.1</span>
+                <strong>解域化之后，再域化</strong>
+              </footer>
+            </div>
+          </article>
         </div>
       </div>
     </div>
