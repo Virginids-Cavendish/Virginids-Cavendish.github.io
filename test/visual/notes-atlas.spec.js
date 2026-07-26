@@ -141,7 +141,11 @@ async function openAtlas(page, options = {}) {
 }
 
 test("semantic maintenance cleans model input and deterministically caps per-note edges", async () => {
-  const { cleanSemanticBody, selectSemanticEdges } = await import(graphGeneratorUrl);
+  const { cleanSemanticBody, normalizedSourceHash, selectSemanticEdges } = await import(graphGeneratorUrl);
+  const lfSource = "alpha\nbeta\n";
+  expect(normalizedSourceHash(lfSource)).toBe(normalizedSourceHash("alpha\r\nbeta\r\n"));
+  expect(normalizedSourceHash(lfSource)).toBe(normalizedSourceHash("alpha\rbeta\r"));
+
   const dirtyBody = `
     <link rel="stylesheet" href="/assets/notes.css">
     <article>
