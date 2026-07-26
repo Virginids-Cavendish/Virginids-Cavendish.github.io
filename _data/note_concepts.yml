@@ -1,0 +1,99 @@
+feedback-control:
+  label: "反馈控制"
+  kind: "research"
+  aliases:
+    - "反馈回路"
+    - "控制回路"
+    - "feedback control"
+    - "feedback loop"
+  description: "根据观测误差持续修正下一步行动的控制关系。"
+
+latent-state:
+  label: "潜在状态"
+  kind: "research"
+  aliases:
+    - "学习状态"
+    - "不可观测状态"
+    - "state estimation"
+    - "latent state"
+  description: "不能被一次行为直接读出、只能由多次观测推断的学习状态。"
+
+adaptive-learning:
+  label: "自适应学习"
+  kind: "research"
+  aliases:
+    - "动态学习"
+    - "学习路径"
+    - "adaptive learning"
+    - "adaptive system"
+  description: "依据行为证据与误差改变材料、路径和复习节律的学习机制。"
+
+learner-agency:
+  label: "学习者自主性"
+  kind: "research"
+  aliases:
+    - "自主选择"
+    - "学习者能动性"
+    - "learner agency"
+    - "autonomy"
+  description: "学习者理解、拒绝或改写系统建议的实际能力。"
+
+validation:
+  label: "验证边界"
+  kind: "research"
+  aliases:
+    - "可证伪"
+    - "验证"
+    - "evaluation"
+    - "validation"
+  description: "区分可观察结果、暂时判断和仍待检验假设的边界。"
+
+xenofeminism:
+  label: "陌异女性主义"
+  kind: "translation"
+  aliases:
+    - "陌异"
+    - "异乡"
+    - "xenofeminism"
+    - "xeno"
+  description: "拒绝把自然、身份与技术秩序视为不可改变归属的政治概念。"
+
+platform-socialism:
+  label: "平台社会主义"
+  kind: "translation"
+  aliases:
+    - "平台"
+    - "公共平台"
+    - "platform socialism"
+    - "platform"
+  description: "围绕平台基础设施、公共所有与关系重新组织展开的政治构想。"
+
+terminology:
+  label: "术语抉择"
+  kind: "translation"
+  aliases:
+    - "译名"
+    - "命名"
+    - "terminology"
+    - "word choice"
+  description: "在多个候选译法之间承担语义、语境与可讨论性的取舍。"
+
+political-translation:
+  label: "政治翻译"
+  kind: "translation"
+  aliases:
+    - "概念迁移"
+    - "语境政治"
+    - "political translation"
+    - "concept migration"
+  description: "概念跨语境移动时产生的新生命、损失与再驯化风险。"
+
+translator-agency:
+  label: "译者介入"
+  kind: "translation"
+  aliases:
+    - "译者责任"
+    - "翻译主体"
+    - "translator agency"
+    - "translator responsibility"
+  description: "译者无法从命名中消失，必须说明并承担其介入后果。"

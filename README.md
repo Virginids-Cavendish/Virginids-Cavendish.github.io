@@ -21,9 +21,9 @@
 - 将网站定位改为控制理论、运筹学、自适应动态学习与自动驾驶方向的个人研究作品集。
 - 首页覆盖课程要求的 `Hero`、`About`、`Skills`、`Projects`、`Contact` 五个基础区块。
 - 项目页展示 Rhizome-Learn 私有研究原型与 Translation Projects。
-- Blog/Notes 只保留研究札记和翻译札记。
+- Blog/Notes 以研究札记和翻译札记为核心，提供静态语义图谱、全文搜索、Tag / Category 入口与响应式阅读模式。
 - CV 改为真实教育背景、技能、项目与翻译项目摘要。
-- 视觉风格采用研究地形、控制系统轨迹和 rhizome network 的概念图形。
+- 视觉风格采用 Renaissance Cyber-Rhizome：文艺复兴档案结构承载材料，光、电路与反馈构成动态层。
 
 ## Local Preview
 
@@ -35,6 +35,17 @@ bundle exec jekyll serve
 ```
 
 当前本机环境以 GitHub Actions 作为主要构建路径；本地缺少 Ruby/Bundler/Docker 时，使用 GitHub Pages 部署结果与浏览器截图完成公开访问验证。
+
+## Notes Graph Maintenance
+
+Notes 图谱只在构建阶段生成，浏览器不会运行模型或发出远程 AI 请求。修改札记正文、`concepts` 或 `project_ids` 后，运行：
+
+```powershell
+npm.cmd run build:notes-graph
+npm.cmd run verify:notes-graph
+```
+
+生成的 `assets/data/notes-semantic-graph.json` 是站点输入的一部分，应与正文改动一并提交。部署 workflow 会再次执行内容与生成数据校验。
 
 ## Assignment Evidence
 

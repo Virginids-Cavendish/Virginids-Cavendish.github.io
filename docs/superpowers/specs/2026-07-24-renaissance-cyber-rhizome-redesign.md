@@ -1,6 +1,6 @@
 # Design Spec: Renaissance Cyber-Rhizome Homepage
 
-状态：本地实现与自动化验收完成，待发布授权
+状态：已实现并发布；后续修订见 2026-07-26 增量规范
 
 版本：1.1
 
@@ -10,6 +10,9 @@
 文档优先级：
 
 - 本文件是本轮首页视觉重做的当前规范。
+- 性能调度、组装终态、Collision 横向证据链、阅读器光标及 Blog / Notes 的后续修订，以
+  `docs/superpowers/specs/2026-07-26-renaissance-cyber-rhizome-performance-motion-notes-refinement.md`
+  为准。
 - `docs/prd.md`、`docs/design.md` 与 `docs/checklist.md` 保留为课程初版和历史验收基线。
 - 当旧文档与本文件在 Hero 头像、移动端降级、真实截图、PDF 书页或姓名素材上冲突时，本文件优先。
 - 本文件的优先级只覆盖首页与首页可见的全局壳层，不扩大到未纳入本期的子页面。

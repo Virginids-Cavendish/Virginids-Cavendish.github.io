@@ -1,0 +1,120 @@
+<link rel="stylesheet" href="{{ '/assets/css/notes-atlas.css' | relative_url }}" />
+
+{% if page.notes_scope_type == "tag" %} {% assign scope_posts = site.tags[page.notes_scope_value] %} {% else %} {% assign scope_posts =
+site.categories[page.notes_scope_value] %} {% endif %}
+
+<main
+  class="notes-atlas notes-atlas--taxonomy"
+  data-notes-atlas-root
+  data-notes-scope-type="{{ page.notes_scope_type }}"
+  data-notes-scope-value="{{ page.notes_scope_value }}"
+  data-notes-graph-url="{{ '/assets/data/notes-semantic-graph.json' | relative_url }}"
+>
+  <header class="notes-atlas__masthead">
+    <p class="notes-atlas__plate">LOCAL RHIZOME / {{ page.notes_scope_type | upcase }}</p>
+    <h1><span class="notes-taxonomy__scope">{{ page.notes_scope_label }}</span></h1>
+    <p>
+      这一局部图只保留与当前{{ page.notes_scope_type | replace: 'tag', '标签' | replace: 'category', '分类' }}相连的札记、项目与概念。
+      返回总图不会改变节点身份或语义边。
+    </p>
+  </header>
+
+  <section class="notes-atlas__controls" aria-label="局部图谱控制">
+    <nav class="notes-atlas__modes" aria-label="图谱层级">
+      <a href="{{ '/blog/' | relative_url }}"><span>00</span>返回全部路径</a>
+    </nav>
+    <form class="notes-atlas__search" role="search" data-notes-search-form>
+      <label for="notes-taxonomy-query">在当前局部图中搜索</label>
+      <div>
+        <span aria-hidden="true">⌖</span>
+        <input
+          id="notes-taxonomy-query"
+          type="search"
+          name="q"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="标题、概念、标签或正文"
+          data-notes-search
+        />
+        <output data-notes-search-status aria-live="polite">{{ scope_posts | size }} 条路径</output>
+      </div>
+    </form>
+  </section>
+
+  <section class="notes-atlas__graph-section" aria-labelledby="notes-local-graph-title">
+    <header>
+      <p>SEMANTIC FIELD / LOCAL TOPOLOGY</p>
+      <h2 id="notes-local-graph-title">局部根茎图</h2>
+      <p>概念与项目节点说明这一集合的局部语境；相关文章排序仍由全文语义关系决定。</p>
+    </header>
+
+    <div class="notes-graph" data-notes-graph>
+      <svg class="notes-graph__edges" data-notes-edge-layer viewBox="0 0 1000 620" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="notes-graph__nodes" data-notes-node-layer>
+        {% for post in scope_posts %} {% if post.note_id %}
+        <a
+          class="notes-node notes-node--note notes-node--{{ post.note_kind }}"
+          href="{{ post.url | relative_url }}"
+          data-notes-node
+          data-node-id="{{ post.note_id }}"
+          data-note-id="{{ post.note_id }}"
+          data-note-kind="{{ post.note_kind }}"
+        >
+          <span class="notes-node__index">{{ forloop.index | prepend: '0' | slice: -2, 2 }}</span>
+          <strong>{{ post.title }}</strong>
+          <span class="notes-node__excerpt" data-notes-excerpt>{{ post.description }}</span>
+        </a>
+        {% endif %} {% endfor %}
+      </div>
+      <p class="notes-graph__loading" data-notes-graph-status>TOPOLOGY / LOADING</p>
+    </div>
+  </section>
+
+  <section class="notes-index" aria-labelledby="notes-local-index-title">
+    <header class="notes-index__header">
+      <p>READABLE FALLBACK / LOCAL INDEX</p>
+      <h2 id="notes-local-index-title">文字索引</h2>
+    </header>
+    <ol class="notes-index__list" data-notes-index>
+      {% for post in scope_posts %} {% if post.note_id %}
+      <li
+        class="notes-index__item notes-index__item--{{ post.note_kind }}"
+        data-notes-index-item
+        data-note-id="{{ post.note_id }}"
+        data-note-kind="{{ post.note_kind }}"
+        data-tags="{{ post.tags | join: ' ' }}"
+        data-categories="{{ post.categories | join: ' ' }}"
+        data-concepts="{{ post.concepts | join: ' ' }}"
+      >
+        <article>
+          <div class="notes-index__coordinate" aria-hidden="true">
+            <span>{{ forloop.index | prepend: '0' | slice: -2, 2 }}</span>
+            <span>{{ post.note_kind | upcase }}</span>
+          </div>
+          <div class="notes-index__body">
+            <h3><a href="{{ post.url | relative_url }}">{{ post.title }}</a></h3>
+            <p class="notes-index__thesis">{{ post.thesis }}</p>
+            <p class="notes-index__excerpt" data-notes-excerpt>{{ post.description }}</p>
+            <div class="notes-index__meta">
+              <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y.%m.%d" }}</time>
+              {% for category in post.categories %}
+              <a href="{{ category | slugify | prepend: '/blog/category/' | append: '/' | relative_url }}">△ {{ category }}</a>
+              {% endfor %} {% for tag in post.tags %}
+              <a href="{{ tag | slugify | prepend: '/blog/tag/' | append: '/' | relative_url }}">#{{ tag }}</a>
+              {% endfor %}
+            </div>
+          </div>
+          <span class="notes-index__enter" aria-hidden="true">ENTER ───→</span>
+        </article>
+      </li>
+      {% endif %} {% endfor %}
+    </ol>
+    <p class="notes-index__empty" data-notes-empty hidden>当前搜索没有命中路径。</p>
+  </section>
+
+  <noscript>
+    <p class="notes-atlas__noscript">局部图谱漂移已停用；当前集合的文字索引仍可完整阅读。</p>
+  </noscript>
+</main>
+
+<script defer src="{{ '/assets/js/notes-atlas.js' | relative_url }}"></script>

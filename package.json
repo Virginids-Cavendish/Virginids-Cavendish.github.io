@@ -1,14 +1,19 @@
 {
   "scripts": {
+    "build:notes-graph": "node scripts/build-note-semantic-graph.mjs",
     "verify:assignment": "node scripts/verify-assignment.mjs",
+    "verify:notes-graph": "node scripts/build-note-semantic-graph.mjs --check",
     "lint:prettier": "prettier . --check",
     "lint:style-contract": "node test/style_contract.js",
     "test:visual": "playwright test --config test/visual/playwright.config.js",
+    "test:visual:performance": "playwright test --config test/visual/playwright.performance.config.js --workers=1",
+    "test:visual:acceptance": "npm run test:visual -- --workers=1 && npm run test:visual:performance",
     "test:visual:update": "playwright test --config test/visual/playwright.config.js --update-snapshots"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "@shopify/prettier-plugin-liquid": "^1.10.0",
+    "@xenova/transformers": "2.17.2",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.8.0"
