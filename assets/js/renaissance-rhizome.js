@@ -800,9 +800,10 @@
       this.items = this.track ? Array.from(this.track.querySelectorAll("[data-rr-evidence]")) : [];
       this.visible = false;
       this.progress = 0;
-      this.distanceVh = 220;
-      this.targetDistanceVh = 220;
-      this.distanceLocked = false;
+      this.distanceVh = 180;
+      this.targetDistanceVh = 180;
+      this.distanceLocked = true;
+      this.lifecycleDensity = 0.4;
       this.measurement = null;
       this.lastSoftwarePaintTime = 0;
       this.styleCache = new WeakMap();
@@ -872,9 +873,14 @@
       this.progress = clamp(progress, 0, 1);
       const progressData = this.progress.toFixed(4);
       if (this.stage.dataset.rrEvidenceProgress !== progressData) this.stage.dataset.rrEvidenceProgress = progressData;
-      const span = this.items.length + 1.15;
+      const span = Math.max(1, this.items.length - 1);
       this.items.forEach((item, index) => {
-        const local = this.progress * span - index;
+        // The evidence track is centered on the first plate at progress 0 and
+        // the last plate at progress 1. Drive reveal state from that same
+        // geometry so a plate cannot finish revealing before it reaches the
+        // viewport. The overlap keeps adjacent plates cross-fading instead of
+        // opening black gaps between them.
+        const local = 0.5 + (this.progress * span - index) * this.lifecycleDensity;
         this.applyLifecycle(item, local);
       });
     }
@@ -940,24 +946,6 @@
 
       const { stageBounds, viewportBounds, viewportHeight } = measurement;
       const navOffset = Math.max(0, viewportBounds.top);
-
-      if (!this.distanceLocked && stageBounds.top < viewportHeight * 1.25) {
-        const speed = clamp((Math.abs(this.sharedState.scrollVelocity || 0) - 3) / 55, 0, 1);
-        const candidate = 300 - ease(speed) * 200;
-        if (Math.abs(candidate - this.targetDistanceVh) > 8) this.targetDistanceVh = candidate;
-        const previousDistance = this.distanceVh;
-        if (stageBounds.top <= navOffset) {
-          this.distanceVh = this.targetDistanceVh;
-          this.distanceLocked = true;
-        } else {
-          this.distanceVh = lerp(this.distanceVh, this.targetDistanceVh, 0.24);
-          if (Math.abs(this.distanceVh - this.targetDistanceVh) < 0.6) this.distanceVh = this.targetDistanceVh;
-        }
-        if (Math.abs(previousDistance - this.distanceVh) > 0.05) {
-          this.stage.style.setProperty("--rr-collision-distance", `${this.distanceVh.toFixed(2)}svh`);
-          this.scheduler.wake("resizeDirty");
-        }
-      }
 
       const travel = Math.max(1, stageBounds.height - viewportBounds.height);
       const progress = clamp((navOffset - stageBounds.top) / travel, 0, 1);

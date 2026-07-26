@@ -620,7 +620,7 @@ test("FIDELITY measures high refresh and changes sampling without deleting mater
   await page.locator("[data-rr-fidelity='auto']").click();
   await expect(root).toHaveAttribute("data-rr-fidelity-mode", "auto");
 
-  await moveCollisionTo(page, (2 + 0.5) / 5.15);
+  await moveCollisionTo(page, 2 / 3);
   const collisionBeforeModeChange = await page.evaluate(() => window.__RR_VISUAL_API__.snapshot().collision);
   await page.locator("[data-rr-fidelity='2']").click();
   await expect(root).toHaveAttribute("data-rr-fidelity-level", "2");
@@ -894,7 +894,7 @@ test("research assembles, collision evidence stays legible, and the field releas
   if (testInfo.project.name === "mobile") {
     await page.locator("[data-rr-evidence-track]").scrollIntoViewIfNeeded();
   } else {
-    await moveCollisionTo(page, 0.5 / 5.15);
+    await moveCollisionTo(page, 0);
   }
   const collisionMaterial = await collisionImages.evaluateAll((images) =>
     images.map((image) => ({
@@ -938,7 +938,7 @@ test("research assembles, collision evidence stays legible, and the field releas
   expect(networkGeometry.left < 0 || networkGeometry.right > networkGeometry.viewportWidth).toBeTruthy();
 });
 
-test("desktop collision evidence follows a reversible queued-to-passed horizontal chain", async ({ page }, testInfo) => {
+test("desktop collision evidence follows a reversible cross-fading horizontal chain without empty frames", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "desktop pinned evidence-chain acceptance");
   await preparePage(page, "dark");
   await page.goto("/al-folio/", { waitUntil: "networkidle" });
@@ -949,7 +949,8 @@ test("desktop collision evidence follows a reversible queued-to-passed horizonta
   const evidence = page.locator("[data-rr-evidence]");
   await expect(evidence).toHaveCount(4);
 
-  const span = 5.15;
+  const span = 3;
+  const lifecycleDensity = 0.4;
   const lifecycle = [
     ["scanning", 0.1],
     ["revealed", 0.28],
@@ -957,14 +958,18 @@ test("desktop collision evidence follows a reversible queued-to-passed horizonta
     ["receding", 0.82],
     ["passed", 1.05],
   ];
-  for (let index = 0; index < 4; index += 1) {
-    for (const [state, local] of lifecycle) {
-      await moveCollisionTo(page, (index + local) / span);
-      await expect(evidence.nth(index)).toHaveAttribute("data-rr-evidence-state", state);
-    }
+  const lifecycleItemIndex = 1;
+  for (const [state, local] of lifecycle) {
+    await moveCollisionTo(page, (lifecycleItemIndex + (local - 0.5) / lifecycleDensity) / span);
+    await expect(evidence.nth(lifecycleItemIndex)).toHaveAttribute("data-rr-evidence-state", state);
   }
 
-  const thirdHoldingProgress = (2 + 0.5) / span;
+  await moveCollisionTo(page, 0);
+  await expect(evidence.nth(0)).toHaveAttribute("data-rr-evidence-state", "holding");
+  await moveCollisionTo(page, 1);
+  await expect(evidence.nth(3)).toHaveAttribute("data-rr-evidence-state", "holding");
+
+  const thirdHoldingProgress = 2 / span;
   await moveCollisionTo(page, thirdHoldingProgress);
   await expect(evidence.nth(2)).toHaveAttribute("data-rr-evidence-state", "holding");
   const forwardHolding = await evidenceGeometry(page, 2);
@@ -984,7 +989,7 @@ test("desktop collision evidence follows a reversible queued-to-passed horizonta
   expect(forwardHolding.visibleWidthRatio).toBeGreaterThan(0.55);
   expect(forwardHolding.visibleHeightRatio).toBeGreaterThan(0.95);
 
-  await moveCollisionTo(page, (2 + 0.86) / span);
+  await moveCollisionTo(page, (2 + (0.86 - 0.5) / lifecycleDensity) / span);
   await expect(evidence.nth(2)).toHaveAttribute("data-rr-evidence-state", "receding");
   await moveCollisionTo(page, thirdHoldingProgress);
   const reverseHolding = await evidenceGeometry(page, 2);
@@ -996,7 +1001,7 @@ test("desktop collision evidence follows a reversible queued-to-passed horizonta
   expect(reverseHolding.itemTransform).toBe(forwardHolding.itemTransform);
   expect(reverseHolding.imageTransform).toBe(forwardHolding.imageTransform);
 
-  await moveCollisionTo(page, (2 - 0.08) / span);
+  await moveCollisionTo(page, (2 + (-0.08 - 0.5) / lifecycleDensity) / span);
   await expect(evidence.nth(2)).toHaveAttribute("data-rr-evidence-state", "queued");
   const geometry = await page.locator("[data-rr-collision-evidence]").evaluate((stage) => {
     const viewport = stage.querySelector(".rr-collision__evidence-viewport");
@@ -1008,10 +1013,32 @@ test("desktop collision evidence follows a reversible queued-to-passed horizonta
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
-  expect(geometry.travel / geometry.viewportHeight).toBeGreaterThanOrEqual(1);
-  expect(geometry.travel / geometry.viewportHeight).toBeLessThanOrEqual(3.3);
+  expect(geometry.travel / geometry.viewportHeight).toBeGreaterThanOrEqual(1.75);
+  expect(geometry.travel / geometry.viewportHeight).toBeLessThanOrEqual(2.2);
   expect(geometry.translate).not.toBe("none");
   expect(geometry.documentOverflow).toBeLessThanOrEqual(1);
+
+  for (const progress of [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1]) {
+    await moveCollisionTo(page, progress);
+    const visibleEvidence = await evidence.evaluateAll((items) => {
+      const viewport = items[0]?.closest(".rr-collision__evidence-viewport");
+      if (!(viewport instanceof HTMLElement)) return [];
+      const viewportBounds = viewport.getBoundingClientRect();
+      return items
+        .map((item, index) => {
+          const bounds = item.getBoundingClientRect();
+          const image = item.querySelector("img");
+          const horizontalIntersection = Math.max(0, Math.min(bounds.right, viewportBounds.right) - Math.max(bounds.left, viewportBounds.left));
+          return {
+            index,
+            opacity: image ? Number.parseFloat(getComputedStyle(image).opacity) : 0,
+            horizontalRatio: horizontalIntersection / Math.max(1, bounds.width),
+          };
+        })
+        .filter(({ opacity, horizontalRatio }) => opacity >= 0.16 && horizontalRatio >= 0.12);
+    });
+    expect(visibleEvidence.length, `progress ${progress} should keep visual evidence in the viewport`).toBeGreaterThan(0);
+  }
 });
 
 test("late visual-test stabilizer injection freezes the Canvas field", async ({ page }) => {
@@ -1334,12 +1361,23 @@ test("mobile keeps the full instrument and avoids horizontal overflow", async ({
 
   const evidenceTrack = page.locator("[data-rr-evidence-track]");
   await evidenceTrack.scrollIntoViewIfNeeded();
-  const evidenceGeometry = await evidenceTrack.evaluate((track) => ({
-    maximum: track.scrollWidth - track.clientWidth,
-    documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  }));
+  const evidenceGeometry = await evidenceTrack.evaluate((track) => {
+    const item = track.querySelector("[data-rr-evidence]");
+    const viewport = track.closest(".rr-collision__evidence-viewport");
+    const itemBounds = item?.getBoundingClientRect();
+    const viewportBounds = viewport?.getBoundingClientRect();
+    return {
+      maximum: track.scrollWidth - track.clientWidth,
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      itemAspect: itemBounds ? itemBounds.width / itemBounds.height : 0,
+      viewportRatio: viewportBounds ? viewportBounds.height / window.innerHeight : 0,
+    };
+  });
   expect(evidenceGeometry.maximum).toBeGreaterThan(100);
   expect(evidenceGeometry.documentOverflow).toBeLessThanOrEqual(1);
+  expect(evidenceGeometry.itemAspect).toBeGreaterThanOrEqual(0.75);
+  expect(evidenceGeometry.itemAspect).toBeLessThanOrEqual(0.85);
+  expect(evidenceGeometry.viewportRatio).toBeLessThan(0.7);
   await evidenceTrack.evaluate((track) => {
     track.scrollLeft = (track.scrollWidth - track.clientWidth) * 0.72;
     track.dispatchEvent(new Event("scroll"));
@@ -1362,6 +1400,22 @@ test("mobile keeps the full instrument and avoids horizontal overflow", async ({
       .filter(({ width, height }) => width < 44 || height < 44);
   });
   expect(undersizedTargets).toEqual([]);
+
+  await page.setViewportSize({ width: 667, height: 375 });
+  await evidenceTrack.scrollIntoViewIfNeeded();
+  const landscapeEvidence = await evidenceTrack.evaluate((track) => {
+    const itemBounds = track.querySelector("[data-rr-evidence]")?.getBoundingClientRect();
+    const viewportBounds = track.closest(".rr-collision__evidence-viewport")?.getBoundingClientRect();
+    return {
+      aspect: itemBounds ? itemBounds.width / itemBounds.height : 0,
+      viewportRatio: viewportBounds ? viewportBounds.height / window.innerHeight : 0,
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(landscapeEvidence.aspect).toBeGreaterThanOrEqual(0.75);
+  expect(landscapeEvidence.aspect).toBeLessThanOrEqual(0.85);
+  expect(landscapeEvidence.viewportRatio).toBeLessThan(0.9);
+  expect(landscapeEvidence.documentOverflow).toBeLessThanOrEqual(1);
 });
 
 test("mobile books play their own assembly and recover after fast scrolls in both directions", async ({ page }, testInfo) => {
@@ -1535,7 +1589,9 @@ test("mobile touch and authorized device tilt perturb the live field", async ({ 
           })
         );
         const snapshot = window.__RR_VISUAL_API__.snapshot();
-        if (snapshot.nearest.active) return { found: true, x, y, nearest: snapshot.nearest };
+        if (snapshot.nearest.active && snapshot.nearest.distancePx <= snapshot.nearest.thresholdPx) {
+          return { found: true, x, y, nearest: snapshot.nearest };
+        }
       }
     }
     return { found: false, x: 0, y: 0, nearest: null };
